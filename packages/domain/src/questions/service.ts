@@ -1,6 +1,7 @@
 import { and, countDistinct, eq, inArray, sql } from 'drizzle-orm'
 import type { Database, DbExecutor } from '@clutch/db'
 import { schema } from '@clutch/db'
+import { placementTargetShift } from '../rating/placement.js'
 import {
   AppError,
   ErrorCodes,
@@ -525,6 +526,10 @@ export async function getQuestionStats(db: DbExecutor, questionId: string) {
 export type SelectOptions = {
   /** Queue-entry difficulty preference (validated against DB bands). */
   preferredDifficultyId?: string | null
+  /** Fewest placement matches remaining across the pairing. >0 biases the
+   *  starting band toward accessible content; adaptive accuracy adjustment
+   *  still applies on top. Derived server-side from authoritative ratings. */
+  placementRemainingMin?: number
 }
 
 type Band = typeof schema.difficultyBands.$inferSelect
@@ -571,6 +576,12 @@ export async function selectQuestionForMatch(
     : ratingBand
       ? bands.indexOf(ratingBand)
       : Math.floor(bands.length / 2)
+
+  // Placement calibration: start accessible, converge to adaptive as
+  // placement matches are consumed (deterministic, server-authoritative).
+  if (options.placementRemainingMin != null && !preferredBand) {
+    baseIndex = Math.max(0, baseIndex - placementTargetShift(options.placementRemainingMin))
+  }
 
   // Adaptive adjustment from recent per-user solve rates (deterministic).
   const accuracies: number[] = []

@@ -60,7 +60,7 @@ export function PlayerCard({
             <span className="text-muted-foreground"> / {placement!.total}</span>
           </dd>
           <dd className="label-mono mt-1 text-[0.58rem] normal-case tracking-normal text-muted-foreground">
-            Win placements to reveal your rating & tier
+            Complete your placement matches to unlock your competitive rank.
           </dd>
         </dl>
       ) : (

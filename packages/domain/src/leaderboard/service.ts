@@ -8,6 +8,7 @@ export async function getLeaderboard(db: Database, stackId: string, limit = 50, 
   const rows = await db.query.userStackRatings.findMany({
     where: and(
       eq(schema.userStackRatings.stackId, stackId),
+      eq(schema.userStackRatings.placementRemaining, 0),
       gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES),
     ),
     with: { user: { with: { profile: true } } },
@@ -53,7 +54,8 @@ async function enrichEntries(
     .where(
       and(
         eq(schema.userStackRatings.stackId, stackId),
-        gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES),
+        eq(schema.userStackRatings.placementRemaining, 0),
+      gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES),
         eq(schema.users.status, 'active'),
       ),
     )
@@ -80,6 +82,8 @@ export async function getUserRank(db: Database, userId: string, stackId: string)
     where: and(eq(schema.userStackRatings.userId, userId), eq(schema.userStackRatings.stackId, stackId)),
   })
   if (!ratingRow || ratingRow.gamesPlayed < LEADERBOARD_MIN_GAMES) return null
+  // Unranked (in-placement) players hold no leaderboard rank.
+  if (ratingRow.placementRemaining > 0) return null
 
   // Rank = number of eligible players strictly ahead of this rating, plus one.
   const aheadRows = await db
@@ -90,6 +94,7 @@ export async function getUserRank(db: Database, userId: string, stackId: string)
       and(
         eq(schema.userStackRatings.stackId, stackId),
         gt(schema.userStackRatings.rating, ratingRow.rating),
+        eq(schema.userStackRatings.placementRemaining, 0),
         gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES),
         eq(schema.users.status, 'active'),
       ),
@@ -118,3 +123,4 @@ export async function refreshLeaderboardMaterialized(db: Database) {
   // environments that have not applied them yet.
   await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard_global`).catch(() => {})
 }
+

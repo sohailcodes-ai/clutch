@@ -60,42 +60,58 @@ describe('recent match sanitizer (privacy boundary)', () => {
 })
 
 describe('player card DTO contract', () => {
+  const baseCard = {
+    handle: 'CODEPHANTOM',
+    displayName: null,
+    avatarUrl: null,
+    equippedTitle: { code: 'hot_streak', name: 'Hot Streak', rarity: 'rare' },
+    bestRating: 1288,
+    bestStackId: 'python',
+    tierId: 'silver',
+    globalRank: 447,
+    wins: 24,
+    losses: 11,
+    draws: 3,
+    gamesPlayed: 38,
+    peakRating: 1384,
+    winRate: 0.686,
+    competitiveStatus: 'ranked',
+    placementMatchesRequired: 5,
+    placementMatchesCompleted: 5,
+    placementRemaining: 0,
+  }
+
   it('validates a fully-populated card', () => {
+    const parsed = playerCardSchema.safeParse(baseCard)
+    expect(parsed.success).toBe(true)
+  })
+
+  it('validates an unranked card with placement progress', () => {
     const parsed = playerCardSchema.safeParse({
-      handle: 'CODEPHANTOM',
-      displayName: null,
-      avatarUrl: null,
-      equippedTitle: { code: 'hot_streak', name: 'Hot Streak', rarity: 'rare' },
-      bestRating: 1288,
-      bestStackId: 'python',
-      tierId: 'silver',
-      globalRank: 447,
-      wins: 24,
-      losses: 11,
-      draws: 3,
-      gamesPlayed: 38,
-      peakRating: 1384,
-      winRate: 0.686,
+      ...baseCard,
+      competitiveStatus: 'unranked',
+      tierId: null,
+      globalRank: null,
+      placementMatchesCompleted: 2,
+      placementRemaining: 3,
     })
     expect(parsed.success).toBe(true)
   })
 
+  it('rejects an invalid competitive status', () => {
+    const parsed = playerCardSchema.safeParse({
+      ...baseCard,
+      competitiveStatus: 'provisional',
+    })
+    expect(parsed.success).toBe(false)
+  })
+
   it('rejects negative counters', () => {
     const parsed = playerCardSchema.safeParse({
+      ...baseCard,
       handle: 'X',
-      displayName: null,
-      avatarUrl: null,
-      equippedTitle: null,
       bestRating: -5,
-      bestStackId: null,
-      tierId: null,
-      globalRank: null,
       wins: -1,
-      losses: 0,
-      draws: 0,
-      gamesPlayed: 0,
-      peakRating: 0,
-      winRate: 0,
     })
     expect(parsed.success).toBe(false)
   })

@@ -41,19 +41,37 @@ export declare function getUserRatings(db: Database, userId: string): Promise<{
         sortOrder: number;
     } | null;
 }[]>;
+/**
+ * Sanitized per-stack competitive row for SELF endpoints. Tier is withheld
+ * while the player is unranked; placement progress is derived from the
+ * authoritative remaining count (never gamesPlayed).
+ */
+export declare function toSelfRatingView(row: {
+    stackId: string;
+    rating: number;
+    tierId: string | null;
+    gamesPlayed: number;
+    wins: number;
+    losses: number;
+    draws: number;
+    peakRating: number;
+    placementRemaining: number;
+}): {
+    competitiveStatus: import("@clutch/shared").CompetitiveStatus;
+    placementMatchesRequired: number;
+    placementMatchesCompleted: number;
+    placementRemaining: number;
+    stackId: string;
+    rating: number;
+    tierId: string | null;
+    gamesPlayed: number;
+    wins: number;
+    losses: number;
+    draws: number;
+    peakRating: number;
+};
 /** Public, safe-to-expose profile with competitive identity. */
 export declare function getPublicProfile(db: Database, handle: string): Promise<{
-    handle: string;
-    displayName: string | null;
-    avatarUrl: string | null;
-    region: string;
-    bio: string | null;
-    memberSince: Date;
-    equippedTitle: {
-        code: string;
-        name: string;
-        rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
-    } | null;
     bestRating: number | null;
     bestStackId: string | null;
     tierId: string | null;
@@ -66,14 +84,31 @@ export declare function getPublicProfile(db: Database, handle: string): Promise<
     }[];
     ratings: {
         stackId: string;
-        rating: number;
+        rating: number | null;
         tierId: string | null;
         gamesPlayed: number;
         wins: number;
         losses: number;
         draws: number;
-        peakRating: number;
+        peakRating: number | null;
+        placementRemaining: number;
+        placementCompleted: number;
     }[];
+    competitiveStatus: import("@clutch/shared").CompetitiveStatus;
+    placementMatchesRequired: number;
+    placementMatchesCompleted: number;
+    placementRemaining: number;
+    handle: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    region: string;
+    bio: string | null;
+    memberSince: Date;
+    equippedTitle: {
+        code: string;
+        name: string;
+        rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
+    } | null;
 } | null>;
 export declare function listStacks(db: Database): Promise<{
     symbol: string;

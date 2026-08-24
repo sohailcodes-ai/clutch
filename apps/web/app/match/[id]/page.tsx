@@ -48,6 +48,13 @@ type MatchSnapshot = {
     createdAt: string
   }[]
   participants: Participant[]
+  /** Server-authoritative placement context for the viewer. */
+  viewerCompetitive?: {
+    competitiveStatus: 'unranked' | 'ranked'
+    placementMatchesRequired: number
+    placementMatchesCompleted: number
+    placementRemaining: number
+  } | null
 }
 
 function Timer({ endsAt, now }: { endsAt: string | null; now: number }) {
@@ -194,6 +201,15 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       viewer?.ratingAfter !== null && viewer?.ratingAfter !== undefined && viewer
         ? viewer.ratingAfter - viewer.ratingBefore
         : null
+    // Placement context comes from the server snapshot — never guessed.
+    const inPlacement = match.viewerCompetitive?.competitiveStatus === 'unranked'
+    const placementDone = match.viewerCompetitive
+      ? match.viewerCompetitive.placementMatchesCompleted
+      : 0
+    const placementTotal = match.viewerCompetitive
+      ? match.viewerCompetitive.placementMatchesRequired
+      : 0
+    const placementLeft = match.viewerCompetitive?.placementRemaining ?? 0
 
     return (
       <>
@@ -201,6 +217,11 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         <main className="mx-auto max-w-[720px] space-y-6 px-4 py-12">
           <div className="border border-border bg-card/40 p-8 text-center sm:p-12">
             <ClutchLogo size={22} label="" className="mx-auto mb-6 text-primary/70" />
+            {inPlacement ? (
+              <p className="label-mono mb-4 border border-warning/50 px-3 py-1 inline-block text-[0.62rem] font-black uppercase text-warning">
+                Placement match {placementDone} / {placementTotal}
+              </p>
+            ) : null}
             <h1
               className={cn(
                 'text-display text-5xl sm:text-7xl',
@@ -231,6 +252,14 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
             {viewer?.ratingAfter !== null && viewer?.ratingAfter != null ? (
               <p className="data-mono mt-2 text-sm text-muted-foreground">
                 {viewer.ratingBefore} → {viewer.ratingAfter}
+              </p>
+            ) : null}
+
+            {inPlacement ? (
+              <p className="label-mono mt-4 text-[0.62rem] uppercase text-muted-foreground">
+                {placementLeft > 0
+                  ? `Clutch is calibrating your rating — ${placementLeft} placement ${placementLeft === 1 ? 'match' : 'matches'} remaining.`
+                  : 'Placement complete — you are now ranked.'}
               </p>
             ) : null}
 
@@ -271,14 +300,31 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         <AppNav />
         <main className="mx-auto max-w-[900px] px-4 py-12">
           <Panel className="border-primary/40 p-8 sm:p-12">
-            <SectionTitle>Finding start · {match.publicId}</SectionTitle>
+            <SectionTitle>
+              {match.viewerCompetitive?.competitiveStatus === 'unranked'
+                ? `Placement match ${Math.min(match.viewerCompetitive.placementMatchesCompleted + 1, match.viewerCompetitive.placementMatchesRequired)} / ${match.viewerCompetitive.placementMatchesRequired}`
+                : 'Finding start'}{' '}
+              · {match.publicId}
+            </SectionTitle>
 
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 py-8 sm:gap-8">
-              <PlayerIdentity
-                handle={viewer?.handle ?? null}
-                avatarUrl={viewer?.avatarUrl ?? null}
-                rating={viewer?.ratingBefore}
-              />
+              <div>
+                <PlayerIdentity
+                  handle={viewer?.handle ?? null}
+                  avatarUrl={viewer?.avatarUrl ?? null}
+                  rating={
+                    match.viewerCompetitive?.competitiveStatus === 'ranked'
+                      ? viewer?.ratingBefore
+                      : null
+                  }
+                />
+                {match.viewerCompetitive?.competitiveStatus === 'unranked' ? (
+                  <p className="label-mono mt-1 border border-warning/50 px-1.5 py-0.5 inline-block text-[0.55rem] font-black uppercase text-warning">
+                    Unranked · Placement {match.viewerCompetitive.placementMatchesCompleted}/
+                    {match.viewerCompetitive.placementMatchesRequired}
+                  </p>
+                ) : null}
+              </div>
               <div className="text-center">
                 <p className="text-display text-3xl text-primary sm:text-5xl">VS</p>
                 <p className="label-mono mt-2 animate-pulse text-[0.55rem] uppercase text-muted-foreground">

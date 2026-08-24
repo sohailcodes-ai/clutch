@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { AppError, ErrorCodes, registerSchema, loginSchema, updateProfileSchema, completeOnboardingSchema, queueJoinSchema, matchSubmitSchema, editorTelemetrySchema, listQuestionsQuerySchema, } from '@clutch/shared';
 import { schema } from '@clutch/db';
-import { loginUser, logoutUser, registerUser, updateProfile, getUserRatings, completeOnboarding, listStacks, getCurrentSeason, joinQueue, leaveQueue, getQueueStatus, userHasActiveMatch, markReady, forfeitMatch, getMatchSnapshot, createSubmission, getLeaderboard, getUserRank, checkRateLimit, withIdempotency, enqueueSubmissionEvaluation, shouldEvaluateMatch, markMatchEvaluating, resolveMatch, recordEditorTelemetry, recommendNextQuestions, getUserProgress, listActiveTitles, getPublicProfile, getUserAwards, } from '@clutch/domain';
+import { loginUser, logoutUser, registerUser, updateProfile, getUserRatings, toSelfRatingView, completeOnboarding, listStacks, getCurrentSeason, joinQueue, leaveQueue, getQueueStatus, userHasActiveMatch, markReady, forfeitMatch, getMatchSnapshot, createSubmission, getLeaderboard, getUserRank, checkRateLimit, withIdempotency, enqueueSubmissionEvaluation, shouldEvaluateMatch, markMatchEvaluating, resolveMatch, recordEditorTelemetry, recommendNextQuestions, getUserProgress, listActiveTitles, getPublicProfile, getUserAwards, } from '@clutch/domain';
 import { requireAuth } from '../middleware/auth.js';
 const SESSION_COOKIE = 'clutch_session';
 /** Strips credential material (password hashes) before serialization. */
@@ -102,12 +102,18 @@ export async function registerHttpRoutes(app) {
     // ---------------------------------------------------------------------------
     app.get('/profile', { preHandler: [requireAuth] }, async (request) => {
         const userId = request.user.id;
-        const [ratings, stacks, season] = await Promise.all([
+        const [ratingRows, stacks, season] = await Promise.all([
             getUserRatings(request.server.db, userId),
             listStacks(request.server.db),
             getCurrentSeason(request.server.db),
         ]);
-        return { ratings, stacks, season };
+        // Sanitized view: tier withheld while unranked, placement progress
+        // derived server-side. Raw DB rows are never serialized.
+        return {
+            ratings: ratingRows.map(toSelfRatingView),
+            stacks,
+            season,
+        };
     });
     app.patch('/profile', { preHandler: [requireAuth] }, async (request) => {
         const input = parse(updateProfileSchema, request.body);

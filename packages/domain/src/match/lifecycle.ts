@@ -8,6 +8,7 @@ import {
   MATCH_TIME_LIMIT_SEC,
   READY_WINDOW_SEC,
 } from '@clutch/shared'
+import { buildCompetitiveIdentity } from '../rating/placement.js'
 import { appendMatchEvent } from './events.js'
 import { publishMatchEvent } from '../realtime/pubsub.js'
 
@@ -38,6 +39,14 @@ export async function getMatchSnapshot(db: Database, matchId: string, viewerUser
   // Never leak the opponent's source code to either client.
   const ownSubmissions = match.submissions.filter((s) => s.userId === viewerUserId)
 
+  // Server-authoritative placement context for the viewer (result/lobby UI).
+  const viewerRatingRow = await db.query.userStackRatings.findFirst({
+    where: and(
+      eq(schema.userStackRatings.userId, viewerUserId),
+      eq(schema.userStackRatings.stackId, match.stackId),
+    ),
+  })
+
   return {
     ...match,
     questionVersion: {
@@ -46,6 +55,9 @@ export async function getMatchSnapshot(db: Database, matchId: string, viewerUser
     },
     submissions: ownSubmissions,
     opponent: match.participants.find((p) => p.userId !== viewerUserId),
+    viewerCompetitive: viewerRatingRow
+      ? buildCompetitiveIdentity(viewerRatingRow)
+      : null,
   }
 }
 

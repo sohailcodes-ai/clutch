@@ -109,6 +109,8 @@ export declare function inspectMatch(db: Database, matchId: string): Promise<{
         ratingBefore: number;
         ratingAfter: number | null;
         tierId: string | null;
+        competitiveStatus: "ranked" | "unranked" | null;
+        placementRemaining: number | null;
         result: "draw" | "win" | "loss" | "forfeit" | "no_result" | null;
         submissions: {
             id: string;

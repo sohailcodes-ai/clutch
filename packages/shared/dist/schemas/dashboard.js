@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import { COMPETITIVE_STATUSES } from '../constants.js';
 /**
  * Dashboard / PlayerCard DTO contracts. These describe the SHAPE the API
  * guarantees to players; serialization happens in the domain layer and never
  * includes email, session, security or internal identifiers.
  */
+export const competitiveStatusSchema = z.enum(COMPETITIVE_STATUSES);
 export const playerCardSchema = z.object({
     handle: z.string(),
     displayName: z.string().nullable(),
@@ -11,6 +13,12 @@ export const playerCardSchema = z.object({
     equippedTitle: z
         .object({ code: z.string(), name: z.string(), rarity: z.string() })
         .nullable(),
+    /** Server-authoritative competitive state — never inferred client-side. */
+    competitiveStatus: competitiveStatusSchema,
+    placementMatchesRequired: z.number().int().min(0),
+    placementMatchesCompleted: z.number().int().min(0),
+    placementRemaining: z.number().int().min(0),
+    /** Null while unranked: no fake rating/tier/rank may be displayed. */
     bestRating: z.number().int().min(0),
     bestStackId: z.string().nullable(),
     tierId: z.string().nullable(),

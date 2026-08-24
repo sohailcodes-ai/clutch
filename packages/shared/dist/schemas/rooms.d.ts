@@ -10,21 +10,21 @@ export declare const createRoomSchema: z.ZodObject<{
     timeLimitSec: z.ZodDefault<z.ZodNumber>;
     questionSelectionMode: z.ZodDefault<z.ZodEnum<["random", "adaptive"]>>;
 }, "strip", z.ZodTypeAny, {
+    ranked: boolean;
     name: string;
     stackId: string;
     difficultyId: string | null;
     maxPlayers: number;
     isPublic: boolean;
-    ranked: boolean;
     timeLimitSec: number;
     questionSelectionMode: "random" | "adaptive";
 }, {
     name: string;
     stackId: string;
+    ranked?: boolean | undefined;
     difficultyId?: string | null | undefined;
     maxPlayers?: number | undefined;
     isPublic?: boolean | undefined;
-    ranked?: boolean | undefined;
     timeLimitSec?: number | undefined;
     questionSelectionMode?: "random" | "adaptive" | undefined;
 }>;

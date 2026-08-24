@@ -86,7 +86,8 @@ export async function bootstrapAdmin(
           userId: created.id,
           stackId: stack.id,
           rating: DEFAULT_RATING,
-          tierId: 'silver',
+          // No tier yet: an UNRANKED player must never display a rank.
+          tierId: null,
           placementRemaining: PLACEMENT_MATCHES,
           peakRating: DEFAULT_RATING,
         })),

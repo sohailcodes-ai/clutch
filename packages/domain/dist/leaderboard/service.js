@@ -3,7 +3,7 @@ import { schema } from '@clutch/db';
 const LEADERBOARD_MIN_GAMES = 5;
 export async function getLeaderboard(db, stackId, limit = 50, offset = 0) {
     const rows = await db.query.userStackRatings.findMany({
-        where: and(eq(schema.userStackRatings.stackId, stackId), gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES)),
+        where: and(eq(schema.userStackRatings.stackId, stackId), eq(schema.userStackRatings.placementRemaining, 0), gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES)),
         with: { user: { with: { profile: true } } },
         orderBy: desc(schema.userStackRatings.rating),
         limit,
@@ -37,7 +37,7 @@ async function enrichEntries(db, entries, stackId) {
         .select({ total: count() })
         .from(schema.userStackRatings)
         .innerJoin(schema.users, eq(schema.users.id, schema.userStackRatings.userId))
-        .where(and(eq(schema.userStackRatings.stackId, stackId), gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES), eq(schema.users.status, 'active')));
+        .where(and(eq(schema.userStackRatings.stackId, stackId), eq(schema.userStackRatings.placementRemaining, 0), gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES), eq(schema.users.status, 'active')));
     const total = Number(totalRow?.total ?? 0);
     for (const e of entries) {
         e.percentile = total > 0 ? Math.round(((total - e.rank + 1) / total) * 10000) / 100 : null;
@@ -60,12 +60,15 @@ export async function getUserRank(db, userId, stackId) {
     });
     if (!ratingRow || ratingRow.gamesPlayed < LEADERBOARD_MIN_GAMES)
         return null;
+    // Unranked (in-placement) players hold no leaderboard rank.
+    if (ratingRow.placementRemaining > 0)
+        return null;
     // Rank = number of eligible players strictly ahead of this rating, plus one.
     const aheadRows = await db
         .select({ ahead: count() })
         .from(schema.userStackRatings)
         .innerJoin(schema.users, eq(schema.users.id, schema.userStackRatings.userId))
-        .where(and(eq(schema.userStackRatings.stackId, stackId), gt(schema.userStackRatings.rating, ratingRow.rating), gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES), eq(schema.users.status, 'active')));
+        .where(and(eq(schema.userStackRatings.stackId, stackId), gt(schema.userStackRatings.rating, ratingRow.rating), eq(schema.userStackRatings.placementRemaining, 0), gte(schema.userStackRatings.gamesPlayed, LEADERBOARD_MIN_GAMES), eq(schema.users.status, 'active')));
     const ahead = Number(aheadRows[0]?.ahead ?? 0);
     const profile = await db.query.userProfiles.findFirst({
         where: eq(schema.userProfiles.userId, userId),

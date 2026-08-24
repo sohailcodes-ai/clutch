@@ -89,6 +89,12 @@ export declare function getMatchSnapshot(db: Database, matchId: string, viewerUs
             };
         };
     } | undefined;
+    viewerCompetitive: {
+        competitiveStatus: import("@clutch/shared").CompetitiveStatus;
+        placementMatchesRequired: number;
+        placementMatchesCompleted: number;
+        placementRemaining: number;
+    } | null;
     id: string;
     status: "active" | "queued" | "matched" | "starting" | "evaluating" | "resolved" | "cancelled" | "abandoned" | "draw";
     createdAt: Date;

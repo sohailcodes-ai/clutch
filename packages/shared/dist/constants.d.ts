@@ -1,11 +1,25 @@
 export declare const DEFAULT_RATING = 1000;
+/**
+ * Single configuration point for the number of placement matches a new
+ * (or season-reset) player must complete before becoming ranked.
+ * Never hardcode this value elsewhere — import PLACEMENT_MATCHES.
+ */
 export declare const PLACEMENT_MATCHES = 5;
+/** Server-authoritative competitive states. The frontend never decides these. */
+export declare const COMPETITIVE_STATUSES: readonly ["unranked", "ranked"];
+export type CompetitiveStatus = (typeof COMPETITIVE_STATUSES)[number];
 export declare const MATCH_TIME_LIMIT_SEC = 900;
 export declare const READY_WINDOW_SEC = 30;
 export declare const DISCONNECT_FORFEIT_SEC = 60;
 export declare const QUEUE_BAND_INITIAL = 50;
 export declare const QUEUE_BAND_STEP = 50;
 export declare const QUEUE_BAND_MAX = 400;
+/**
+ * Placement matchmaking starts with a wider search band than ranked
+ * matchmaking (uncertain skill), but stays bounded by QUEUE_BAND_MAX —
+ * never "random opponent".
+ */
+export declare const PLACEMENT_QUEUE_BAND_INITIAL: number;
 export declare const SEASON_SOFT_RESET_FACTOR = 0.8;
 export declare const SEASON_DECAY_AFTER_DAYS = 14;
 export declare const RATING_FLOOR = 100;

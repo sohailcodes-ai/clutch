@@ -4,6 +4,7 @@ import { z } from 'zod';
  * guarantees to players; serialization happens in the domain layer and never
  * includes email, session, security or internal identifiers.
  */
+export declare const competitiveStatusSchema: z.ZodEnum<["unranked", "ranked"]>;
 export declare const playerCardSchema: z.ZodObject<{
     handle: z.ZodString;
     displayName: z.ZodNullable<z.ZodString>;
@@ -13,14 +14,20 @@ export declare const playerCardSchema: z.ZodObject<{
         name: z.ZodString;
         rarity: z.ZodString;
     }, "strip", z.ZodTypeAny, {
-        name: string;
         code: string;
+        name: string;
         rarity: string;
     }, {
-        name: string;
         code: string;
+        name: string;
         rarity: string;
     }>>;
+    /** Server-authoritative competitive state — never inferred client-side. */
+    competitiveStatus: z.ZodEnum<["unranked", "ranked"]>;
+    placementMatchesRequired: z.ZodNumber;
+    placementMatchesCompleted: z.ZodNumber;
+    placementRemaining: z.ZodNumber;
+    /** Null while unranked: no fake rating/tier/rank may be displayed. */
     bestRating: z.ZodNumber;
     bestStackId: z.ZodNullable<z.ZodString>;
     tierId: z.ZodNullable<z.ZodString>;
@@ -36,10 +43,14 @@ export declare const playerCardSchema: z.ZodObject<{
     displayName: string | null;
     avatarUrl: string | null;
     equippedTitle: {
-        name: string;
         code: string;
+        name: string;
         rarity: string;
     } | null;
+    competitiveStatus: "unranked" | "ranked";
+    placementMatchesRequired: number;
+    placementMatchesCompleted: number;
+    placementRemaining: number;
     bestRating: number;
     bestStackId: string | null;
     tierId: string | null;
@@ -55,10 +66,14 @@ export declare const playerCardSchema: z.ZodObject<{
     displayName: string | null;
     avatarUrl: string | null;
     equippedTitle: {
-        name: string;
         code: string;
+        name: string;
         rarity: string;
     } | null;
+    competitiveStatus: "unranked" | "ranked";
+    placementMatchesRequired: number;
+    placementMatchesCompleted: number;
+    placementRemaining: number;
     bestRating: number;
     bestStackId: string | null;
     tierId: string | null;
@@ -83,25 +98,25 @@ export declare const recentMatchCardSchema: z.ZodObject<{
     resolvedAt: z.ZodNullable<z.ZodString>;
     ranked: z.ZodBoolean;
 }, "strip", z.ZodTypeAny, {
-    stackId: string;
-    difficultyId: string;
     ranked: boolean;
     matchPublicId: string;
     opponentHandle: string | null;
     opponentAvatarUrl: string | null;
     result: "win" | "loss" | "draw" | "forfeit" | "no_result";
     ratingDelta: number | null;
+    stackId: string;
+    difficultyId: string;
     durationSec: number | null;
     resolvedAt: string | null;
 }, {
-    stackId: string;
-    difficultyId: string;
     ranked: boolean;
     matchPublicId: string;
     opponentHandle: string | null;
     opponentAvatarUrl: string | null;
     result: "win" | "loss" | "draw" | "forfeit" | "no_result";
     ratingDelta: number | null;
+    stackId: string;
+    difficultyId: string;
     durationSec: number | null;
     resolvedAt: string | null;
 }>;

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { schema } from '@clutch/db';
 import { AppError, ErrorCodes, } from '@clutch/shared';
 import { getUserAwards } from '../titles/service.js';
+import { buildCompetitiveIdentity, competitiveStatusOf, placementMatchesCompleted } from '../rating/placement.js';
 import { writeAuditLog } from '../audit.js';
 export async function updateProfile(db, userId, input) {
     if (input.handle) {
@@ -39,6 +40,25 @@ export async function getUserRatings(db, userId) {
         with: { stack: true, tier: true },
     });
 }
+/**
+ * Sanitized per-stack competitive row for SELF endpoints. Tier is withheld
+ * while the player is unranked; placement progress is derived from the
+ * authoritative remaining count (never gamesPlayed).
+ */
+export function toSelfRatingView(row) {
+    const identity = buildCompetitiveIdentity(row);
+    return {
+        stackId: row.stackId,
+        rating: row.rating,
+        tierId: identity.competitiveStatus === 'ranked' ? row.tierId : null,
+        gamesPlayed: row.gamesPlayed,
+        wins: row.wins,
+        losses: row.losses,
+        draws: row.draws,
+        peakRating: row.peakRating,
+        ...identity,
+    };
+}
 /** Public, safe-to-expose profile with competitive identity. */
 export async function getPublicProfile(db, handle) {
     const profile = await db.query.userProfiles.findFirst({
@@ -50,6 +70,15 @@ export async function getPublicProfile(db, handle) {
     const ratings = await getUserRatings(db, profile.userId);
     const awards = await getUserAwards(db, profile.userId);
     const best = ratings.reduce((top, r) => (!top || r.rating > top.rating ? r : top), null);
+    const identity = best
+        ? buildCompetitiveIdentity(best)
+        : {
+            competitiveStatus: 'unranked',
+            placementMatchesRequired: 0,
+            placementMatchesCompleted: 0,
+            placementRemaining: 0,
+        };
+    const ranked = identity.competitiveStatus === 'ranked';
     return {
         handle: profile.handle,
         displayName: profile.displayName,
@@ -64,9 +93,12 @@ export async function getPublicProfile(db, handle) {
                 rarity: profile.equippedTitle.rarity,
             }
             : null,
-        bestRating: best?.rating ?? null,
-        bestStackId: best?.stackId ?? null,
-        tierId: best?.tierId ?? null,
+        ...identity,
+        // Rating/tier are competitive identity — hidden publicly until the
+        // server has actually placed the player.
+        bestRating: ranked ? best?.rating ?? null : null,
+        bestStackId: ranked ? best?.stackId ?? null : null,
+        tierId: ranked ? best?.tierId ?? null : null,
         titles: awards.map((a) => ({
             code: a.title.code,
             name: a.title.name,
@@ -74,16 +106,21 @@ export async function getPublicProfile(db, handle) {
             rarity: a.title.rarity,
             awardedAt: a.awardedAt,
         })),
-        ratings: ratings.map((r) => ({
-            stackId: r.stackId,
-            rating: r.rating,
-            tierId: r.tierId,
-            gamesPlayed: r.gamesPlayed,
-            wins: r.wins,
-            losses: r.losses,
-            draws: r.draws,
-            peakRating: r.peakRating,
-        })),
+        ratings: ratings.map((r) => {
+            const isRanked = competitiveStatusOf(r.placementRemaining) === 'ranked';
+            return {
+                stackId: r.stackId,
+                rating: isRanked ? r.rating : null,
+                tierId: isRanked ? r.tierId : null,
+                gamesPlayed: r.gamesPlayed,
+                wins: r.wins,
+                losses: r.losses,
+                draws: r.draws,
+                peakRating: isRanked ? r.peakRating : null,
+                placementRemaining: r.placementRemaining,
+                placementCompleted: placementMatchesCompleted(r.placementRemaining),
+            };
+        }),
     };
 }
 export async function listStacks(db) {

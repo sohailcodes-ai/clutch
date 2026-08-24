@@ -63,6 +63,16 @@ export type SessionUser = {
 
 export type EquippedTitle = { code: string; name: string; rarity: string }
 
+/** Server-authoritative competitive state. The UI never decides rank. */
+export type CompetitiveStatus = 'unranked' | 'ranked'
+
+export type CompetitiveIdentityDto = {
+  competitiveStatus: CompetitiveStatus
+  placementMatchesRequired: number
+  placementMatchesCompleted: number
+  placementRemaining: number
+}
+
 export type PlayerCardDto = {
   handle: string
   displayName: string | null
@@ -78,7 +88,7 @@ export type PlayerCardDto = {
   gamesPlayed: number
   peakRating: number
   winRate: number
-}
+} & CompetitiveIdentityDto
 
 export type RecentMatchDto = {
   matchPublicId: string
@@ -95,14 +105,15 @@ export type RecentMatchDto = {
 
 export type StackRatingDto = {
   stackId: string
-  rating: number
+  rating: number | null
   tierId: string | null
   gamesPlayed: number
   wins: number
   losses: number
   draws: number
-  peakRating: number
+  peakRating: number | null
   placementRemaining: number
+  placementCompleted: number
 }
 
 export type DashboardDto = {
@@ -238,7 +249,7 @@ export type PublicProfileDto = {
   tierId: string | null
   titles: { code: string; name: string; kind: string; rarity: string; awardedAt: string }[]
   ratings: StackRatingDto[]
-}
+} & CompetitiveIdentityDto
 
 // ---------------------------------------------------------------------------
 // Admin console DTOs (server-redacted views)

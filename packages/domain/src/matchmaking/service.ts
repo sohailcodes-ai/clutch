@@ -10,6 +10,7 @@ import {
   QUEUE_BAND_MAX,
   QUEUE_BAND_STEP,
 } from '@clutch/shared'
+import { pairingInitialBand, placementTargetShift } from '../rating/placement.js'
 import { selectQuestionForMatch } from '../questions/service.js'
 import { appendMatchEvent } from '../match/events.js'
 import { publishUserEvent } from '../realtime/pubsub.js'
@@ -34,13 +35,17 @@ function recentPairKey(a: string, b: string) {
   return `recent_pair:${sorted[0]}:${sorted[1]}`
 }
 
-export function ratingBucket(rating: number) {
-  return Math.floor(rating / QUEUE_BAND_INITIAL) * QUEUE_BAND_INITIAL
+export function ratingBucket(rating: number, bandSize: number = QUEUE_BAND_INITIAL) {
+  return Math.floor(rating / bandSize) * bandSize
 }
 
-export function expandedBand(baseBucket: number, waitSeconds: number) {
+export function expandedBand(
+  baseBucket: number,
+  waitSeconds: number,
+  initialBand: number = QUEUE_BAND_INITIAL,
+) {
   const expansions = Math.floor(waitSeconds / 10)
-  const delta = Math.min(QUEUE_BAND_MAX, QUEUE_BAND_INITIAL + expansions * QUEUE_BAND_STEP)
+  const delta = Math.min(QUEUE_BAND_MAX, initialBand + expansions * QUEUE_BAND_STEP)
   return { min: baseBucket - delta, max: baseBucket + delta + QUEUE_BAND_INITIAL }
 }
 
@@ -114,6 +119,9 @@ export async function joinQueue(
     enqueuedAt: String(score),
     stackId: input.stackId,
     seasonId: season.id,
+    // Placement context travels with the entry so the pairing policy can
+    // widen the search for uncertain skill without extra DB round-trips.
+    placementRemaining: String(ratingRow.placementRemaining),
   })
 
   await publishUserEvent(redis, input.userId, {
@@ -159,6 +167,7 @@ type QueueMeta = {
   enqueuedAt?: string
   stackId?: string
   seasonId?: string
+  placementRemaining?: string
 }
 
 /**
@@ -220,7 +229,19 @@ export async function tryPairQueue(
         }
 
         const waitSeconds = (Date.now() - Number(a.enqueuedAt)) / 1000
-        const band = expandedBand(ratingBucket(Number(a.rating)), waitSeconds)
+        // Placement-aware pairing policy: uncertain skill (either side still
+        // in placement) starts with a wider — but bounded — search band, then
+        // expands exactly like ranked matchmaking. Race protection, queue
+        // uniqueness and the recent-pair guard are untouched.
+        const placementRemainingA = Number(a.placementRemaining ?? 0)
+        const placementRemainingB = Number(b.placementRemaining ?? 0)
+        const involvesPlacement =
+          placementRemainingA > 0 || placementRemainingB > 0
+        const band = expandedBand(
+          ratingBucket(Number(a.rating)),
+          waitSeconds,
+          pairingInitialBand(involvesPlacement),
+        )
         const rb = Number(b.rating)
         if (rb < band.min || rb > band.max) continue
 
@@ -242,7 +263,12 @@ export async function tryPairQueue(
           stackId,
           (Number(a.rating) + rb) / 2,
           [a.userId, b.userId],
-          { preferredDifficultyId: sharedDifficulty },
+          {
+            preferredDifficultyId: sharedDifficulty,
+            // Placement matches start accessible and converge to adaptive:
+            // bias derives from the least-calibrated participant.
+            placementRemainingMin: Math.min(placementRemainingA, placementRemainingB),
+          },
         )
         if (!selected) continue
 

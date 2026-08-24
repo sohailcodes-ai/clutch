@@ -27,6 +27,10 @@ async function collectResults(tx, matchId, questionVersionId, participants) {
             where: and(eq(schema.submissions.matchId, matchId), eq(schema.submissions.userId, p.userId)),
             orderBy: desc(schema.submissions.createdAt),
         });
+        const finalSubmission = await tx.query.submissions.findFirst({
+            where: and(eq(schema.submissions.matchId, matchId), eq(schema.submissions.userId, p.userId), eq(schema.submissions.isFinal, true)),
+            orderBy: desc(schema.submissions.createdAt),
+        });
         results.push({
             userId: p.userId,
             slot: p.slot,
@@ -35,10 +39,32 @@ async function collectResults(tx, matchId, questionVersionId, participants) {
             totalWeight,
             executionTimeMs: submission?.executionTimeMs ?? Number.MAX_SAFE_INTEGER,
             firstAcceptedAt: submission?.status === 'accepted' ? submission.createdAt : undefined,
+            finalSubmissionStatus: finalSubmission?.status ?? null,
             result: 'no_result',
         });
     }
     return results;
+}
+// ---------------------------------------------------------------------------
+// PLACEMENT / RATING INTEGRITY GUARDS (pure, unit-testable)
+// ---------------------------------------------------------------------------
+/** The evaluator could not judge this submission — an infrastructure failure,
+ *  never a competitive signal. */
+export function isEvaluationFailure(status) {
+    return status === 'internal_error';
+}
+/**
+ * Decides whether a judged outcome must be voided into a NO-RESULT match.
+ * A match only consumes placement progress / rating when at least one
+ * evaluated final submission exists AND neither side failed on
+ * infrastructure. Duplicate resolutions can never reach this point at all:
+ * the version-guarded transition absorbs them before any rating work runs.
+ */
+export function shouldVoidCompetitiveOutcome(results) {
+    const anyEvaluated = results.some((r) => r.finalSubmissionStatus !== null);
+    if (!anyEvaluated)
+        return true; // abandoned/timeout with nothing judged
+    return results.some((r) => isEvaluationFailure(r.finalSubmissionStatus));
 }
 /**
  * Atomically applies ELO updates, participant results and ledger entries for a
@@ -139,40 +165,55 @@ export async function resolveMatch(db, redis, matchId) {
             ordered[0],
             ordered[1],
         ]);
-        const better = compareParticipants(results[0], results[1]);
-        if (better) {
-            better.result = 'win';
-            const other = results.find((r) => r.userId !== better.userId);
-            if (other)
-                other.result = 'loss';
-            outcome = {
-                kind: 'judged',
-                results: results,
-                winnerUserId: better.userId,
-            };
+        // Evaluation failure / nothing judged → the match is finalized as a
+        // NO-RESULT: no ELO movement, no placement consumption for anyone.
+        if (shouldVoidCompetitiveOutcome(results)) {
+            outcome = { kind: 'no_result' };
         }
         else {
-            results[0].result = 'draw';
-            results[1].result = 'draw';
-            outcome = {
-                kind: 'judged',
-                results: results,
-                winnerUserId: null,
-            };
+            const better = compareParticipants(results[0], results[1]);
+            if (better) {
+                better.result = 'win';
+                const other = results.find((r) => r.userId !== better.userId);
+                if (other)
+                    other.result = 'loss';
+                outcome = {
+                    kind: 'judged',
+                    results: results,
+                    winnerUserId: better.userId,
+                };
+            }
+            else {
+                results[0].result = 'draw';
+                results[1].result = 'draw';
+                outcome = {
+                    kind: 'judged',
+                    results: results,
+                    winnerUserId: null,
+                };
+            }
         }
     }
     const committed = await db.transaction(async (tx) => {
         const status = outcome.kind === 'forfeit'
             ? 'resolved'
-            : outcome.winnerUserId
+            : outcome.kind === 'no_result'
                 ? 'resolved'
-                : 'draw';
+                : outcome.winnerUserId
+                    ? 'resolved'
+                    : 'draw';
         const updated = await tx
             .update(schema.matches)
             .set({
             status,
-            winnerUserId: outcome.winnerUserId,
-            resolveReason: outcome.kind === 'forfeit' ? 'forfeit' : outcome.winnerUserId ? 'judged' : 'draw',
+            winnerUserId: outcome.kind === 'no_result' ? null : outcome.winnerUserId,
+            resolveReason: outcome.kind === 'forfeit'
+                ? 'forfeit'
+                : outcome.kind === 'no_result'
+                    ? 'no_result'
+                    : outcome.winnerUserId
+                        ? 'judged'
+                        : 'draw',
             resolvedAt: new Date(),
             version: existing.version + 1,
         })
@@ -184,22 +225,33 @@ export async function resolveMatch(db, redis, matchId) {
         if (outcome.kind === 'judged') {
             await applyJudgedOutcome(tx, existing, outcome.results);
         }
-        else {
+        else if (outcome.kind === 'forfeit') {
             const winner = existing.participants.find((p) => p.userId === outcome.winnerUserId);
             const loser = existing.participants.find((p) => p.userId !== outcome.winnerUserId);
             if (winner && loser) {
                 await applyJudgedOutcome(tx, existing, [
-                    { ...winner, passedCount: 1, totalWeight: 1, executionTimeMs: 0, firstAcceptedAt: undefined, result: 'win' },
-                    { ...loser, passedCount: 0, totalWeight: 1, executionTimeMs: Number.MAX_SAFE_INTEGER, firstAcceptedAt: undefined, result: 'loss' },
+                    { ...winner, passedCount: 1, totalWeight: 1, executionTimeMs: 0, firstAcceptedAt: undefined, finalSubmissionStatus: null, result: 'win' },
+                    { ...loser, passedCount: 0, totalWeight: 1, executionTimeMs: Number.MAX_SAFE_INTEGER, firstAcceptedAt: undefined, finalSubmissionStatus: null, result: 'loss' },
                 ]);
             }
+        }
+        else {
+            // NO-RESULT: participants are marked without any competitive effect.
+            await tx.update(schema.matchParticipants).set({ result: 'no_result', ratingAfter: null })
+                .where(eq(schema.matchParticipants.matchId, matchId));
         }
         await appendMatchEvent(tx, {
             matchId,
             eventType: 'match.resolved',
             payload: {
-                winnerUserId: outcome.winnerUserId,
-                resolveReason: outcome.kind === 'forfeit' ? 'forfeit' : outcome.kind === 'judged' && !outcome.winnerUserId ? 'draw' : 'judged',
+                winnerUserId: outcome.kind === 'no_result' ? null : outcome.winnerUserId,
+                resolveReason: outcome.kind === 'forfeit'
+                    ? 'forfeit'
+                    : outcome.kind === 'no_result'
+                        ? 'no_result'
+                        : outcome.kind === 'judged' && !outcome.winnerUserId
+                            ? 'draw'
+                            : 'judged',
             },
         });
         return true;
@@ -345,6 +397,7 @@ export async function adjudicateMatch(db, redis, input) {
         totalWeight,
         executionTimeMs: 0,
         firstAcceptedAt: undefined,
+        finalSubmissionStatus: null,
         result: 'win',
     };
     const loserResult = {
@@ -355,6 +408,7 @@ export async function adjudicateMatch(db, redis, input) {
         totalWeight,
         executionTimeMs: Number.MAX_SAFE_INTEGER,
         firstAcceptedAt: undefined,
+        finalSubmissionStatus: null,
         result: 'loss',
     };
     const committed = await db.transaction(async (tx) => {

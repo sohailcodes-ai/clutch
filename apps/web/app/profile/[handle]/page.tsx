@@ -45,7 +45,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 displayName: player.displayName,
                 avatarUrl: player.avatarUrl,
                 equippedTitle: player.equippedTitle,
-                bestRating: player.bestRating ?? 1000,
+                bestRating: player.bestRating ?? 0,
                 bestStackId: player.bestStackId,
                 tierId: player.tierId,
                 globalRank: null,
@@ -53,13 +53,28 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 losses: player.ratings.reduce((n, r) => n + r.losses, 0),
                 draws: player.ratings.reduce((n, r) => n + r.draws, 0),
                 gamesPlayed: player.ratings.reduce((n, r) => n + r.gamesPlayed, 0),
-                peakRating: player.ratings.reduce((m, r) => Math.max(m, r.peakRating), 0),
+                peakRating: player.ratings.reduce(
+                  (m, r) => Math.max(m, r.peakRating ?? 0),
+                  0,
+                ),
                 winRate:
                   player.ratings.reduce((n, r) => n + r.wins + r.losses, 0) > 0
                     ? player.ratings.reduce((n, r) => n + r.wins, 0) /
                       player.ratings.reduce((n, r) => n + r.wins + r.losses, 0)
                     : 0,
+                competitiveStatus: player.competitiveStatus,
+                placementMatchesRequired: player.placementMatchesRequired,
+                placementMatchesCompleted: player.placementMatchesCompleted,
+                placementRemaining: player.placementRemaining,
               }}
+              placement={
+                player.competitiveStatus === 'unranked'
+                  ? {
+                      completed: player.placementMatchesCompleted,
+                      total: player.placementMatchesRequired,
+                    }
+                  : undefined
+              }
             />
 
             <div>

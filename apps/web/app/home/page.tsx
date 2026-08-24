@@ -126,16 +126,15 @@ export default function HomePage() {
         {data ? (
           <>
             {(() => {
-              // Unranked = every stack still has its full placement set.
-              const first = data.ratings[0]
-              const unranked =
-                data.ratings.length > 0 && data.ratings.every((r) => r.gamesPlayed === 0)
-              return unranked && first ? (
+              // Competitive state is SERVER-authoritative via the player card
+              // DTO. The frontend never decides whether a player is ranked.
+              const unranked = data.playerCard.competitiveStatus === 'unranked'
+              return unranked ? (
                 <PlayerCard
                   player={data.playerCard}
                   placement={{
-                    completed: first.gamesPlayed,
-                    total: first.gamesPlayed + first.placementRemaining,
+                    completed: data.playerCard.placementMatchesCompleted,
+                    total: data.playerCard.placementMatchesRequired,
                   }}
                 />
               ) : (
@@ -202,6 +201,13 @@ export default function HomePage() {
             {/* CONTINUE COMPETING */}
             <Panel>
               <SectionTitle>Continue competing</SectionTitle>
+              {data.playerCard.competitiveStatus === 'unranked' ? (
+                <p className="label-mono mb-4 border border-warning/30 bg-warning/5 px-3 py-2 text-[0.62rem] normal-case tracking-normal text-warning">
+                  You&apos;re unranked — Clutch needs {data.playerCard.placementMatchesRequired}{' '}
+                  competitive matches to determine where you belong. Placement matches are real
+                  matches against other players.
+                </p>
+              ) : null}
               {activeMatchId ? (
                 <div className="flex flex-col items-start gap-3 border border-primary/60 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <p className="font-mono text-sm font-bold text-primary">Opponent found!</p>
@@ -215,7 +221,9 @@ export default function HomePage() {
               ) : inQueue ? (
                 <div className="flex flex-col items-start gap-3 border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
                   <p className="label-mono animate-pulse text-xs text-muted-foreground">
-                    Searching {stacks.find((s) => s.id === selectedStack)?.name ?? ''} opponents…
+                    {data.playerCard.competitiveStatus === 'unranked'
+                      ? `PLACEMENT MATCH ${Math.min(data.playerCard.placementMatchesCompleted + 1, data.playerCard.placementMatchesRequired)} / ${data.playerCard.placementMatchesRequired} · Searching for a competitive opponent…`
+                      : `Searching ${stacks.find((s) => s.id === selectedStack)?.name ?? ''} opponents…`}
                   </p>
                   <button
                     onClick={() => void leaveMatchQueue()}

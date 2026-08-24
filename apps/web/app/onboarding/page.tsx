@@ -47,12 +47,12 @@ export default function OnboardingPage() {
         if (preferred) setStackId(preferred.id)
       })
       .catch(() => setError('Could not load supported stacks.'))
-    // Placement count comes from the backend-initialized rating rows.
+    // Placement count comes from the backend (server-authoritative).
     api
-      .get<{ ratings: { gamesPlayed: number; placementRemaining: number }[] }>('/profile')
+      .get<{ ratings: { placementMatchesRequired: number }[] }>('/profile')
       .then((r) => {
         const first = r.ratings[0]
-        if (first) setPlacementTotal(first.gamesPlayed + first.placementRemaining)
+        if (first) setPlacementTotal(first.placementMatchesRequired)
       })
       .catch(() => {})
   }, [user])

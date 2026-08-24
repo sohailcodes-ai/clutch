@@ -20,10 +20,14 @@ export declare function getDashboard(db: Database, userId: string): Promise<{
         displayName: string | null;
         avatarUrl: string | null;
         equippedTitle: {
-            name: string;
             code: string;
+            name: string;
             rarity: string;
         } | null;
+        competitiveStatus: "unranked" | "ranked";
+        placementMatchesRequired: number;
+        placementMatchesCompleted: number;
+        placementRemaining: number;
         bestRating: number;
         bestStackId: string | null;
         tierId: string | null;
@@ -36,14 +40,14 @@ export declare function getDashboard(db: Database, userId: string): Promise<{
         winRate: number;
     };
     recentMatches: {
-        stackId: string;
-        difficultyId: string;
         ranked: boolean;
         matchPublicId: string;
         opponentHandle: string | null;
         opponentAvatarUrl: string | null;
         result: "win" | "loss" | "draw" | "forfeit" | "no_result";
         ratingDelta: number | null;
+        stackId: string;
+        difficultyId: string;
         durationSec: number | null;
         resolvedAt: string | null;
     }[];
@@ -57,6 +61,7 @@ export declare function getDashboard(db: Database, userId: string): Promise<{
         draws: number;
         peakRating: number;
         placementRemaining: number;
+        placementCompleted: number;
     }[];
     serverTimeMs: number;
 } | null>;

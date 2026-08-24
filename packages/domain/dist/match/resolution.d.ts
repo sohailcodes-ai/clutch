@@ -2,6 +2,19 @@ import type { Redis } from 'ioredis';
 import type { Database } from '@clutch/db';
 import { schema } from '@clutch/db';
 type ResolvedMatch = typeof schema.matches.$inferSelect;
+/** The evaluator could not judge this submission — an infrastructure failure,
+ *  never a competitive signal. */
+export declare function isEvaluationFailure(status: string | null | undefined): boolean;
+/**
+ * Decides whether a judged outcome must be voided into a NO-RESULT match.
+ * A match only consumes placement progress / rating when at least one
+ * evaluated final submission exists AND neither side failed on
+ * infrastructure. Duplicate resolutions can never reach this point at all:
+ * the version-guarded transition absorbs them before any rating work runs.
+ */
+export declare function shouldVoidCompetitiveOutcome(results: readonly {
+    finalSubmissionStatus: string | null;
+}[]): boolean;
 /**
  * Authoritative match resolution.
  *

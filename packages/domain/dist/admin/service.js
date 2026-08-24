@@ -2,6 +2,7 @@ import { and, eq, ilike, inArray, sql } from 'drizzle-orm';
 import { schema } from '@clutch/db';
 import { AppError, ErrorCodes } from '@clutch/shared';
 import { writeAuditLog } from '../audit.js';
+import { competitiveStatusOf } from '../rating/placement.js';
 import { appendMatchEvent, getMatchEventsSince } from '../match/events.js';
 import { publishMatchEvent } from '../realtime/pubsub.js';
 /**
@@ -226,6 +227,10 @@ export async function inspectMatch(db, matchId) {
                 ratingBefore: p.ratingBefore,
                 ratingAfter: p.ratingAfter,
                 tierId: rating?.tierId ?? null,
+                // Current competitive state of the participant in this stack — lets
+                // moderators distinguish ranked / placement / unranked matches.
+                competitiveStatus: rating ? competitiveStatusOf(rating.placementRemaining) : null,
+                placementRemaining: rating?.placementRemaining ?? null,
                 result: p.result,
                 submissions: submissions
                     .filter((s) => s.userId === p.userId)

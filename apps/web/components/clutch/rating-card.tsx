@@ -20,23 +20,36 @@ export function RatingCard({
   return (
     <Panel>
       <ul className="divide-y divide-border/60">
-        {ratings.map((r) => (
-          <li key={r.stackId} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
-            <div>
-              <p className="font-mono text-sm">{stackName(r.stackId)}</p>
-              <p className="label-mono text-[0.6rem] uppercase text-muted-foreground">
-                {r.tierId ?? 'unranked'}
-                {r.placementRemaining > 0 ? ` · ${r.placementRemaining} placements left` : ''}
-              </p>
-            </div>
-            <div className="text-right font-mono text-sm">
-              <span className="font-bold text-primary">{r.rating}</span>
-              <span className="label-mono ml-3 text-[0.62rem] text-muted-foreground">
-                {r.wins}W/{r.losses}L/{r.draws}D
-              </span>
-            </div>
-          </li>
-        ))}
+        {ratings.map((r) => {
+          const inPlacement = r.placementRemaining > 0
+          return (
+            <li key={r.stackId} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+              <div>
+                <p className="font-mono text-sm">{stackName(r.stackId)}</p>
+                <p className="label-mono text-[0.6rem] uppercase text-muted-foreground">
+                  {inPlacement ? (
+                    <span className="border border-warning/50 px-1.5 py-0.5 font-black text-warning">
+                      Unranked · {r.placementCompleted}/{r.placementRemaining + r.placementCompleted} placement
+                    </span>
+                  ) : (
+                    (r.tierId ?? 'unranked')
+                  )}
+                </p>
+              </div>
+              <div className="text-right font-mono text-sm">
+                <span className={`font-bold ${inPlacement ? 'text-muted-foreground' : 'text-primary'}`}>
+                  {r.rating ?? '—'}
+                </span>
+                {inPlacement ? (
+                  <p className="label-mono text-[0.55rem] uppercase text-muted-foreground">provisional</p>
+                ) : null}
+                <span className="label-mono ml-3 text-[0.62rem] text-muted-foreground">
+                  {r.wins}W/{r.losses}L/{r.draws}D
+                </span>
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </Panel>
   )

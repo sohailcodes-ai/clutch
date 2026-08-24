@@ -24,6 +24,7 @@ import {
   getUserByHandle,
    updateProfile,
    getUserRatings,
+   toSelfRatingView,
    completeOnboarding,
   listStacks,
   getCurrentSeason,
@@ -184,12 +185,18 @@ export async function registerHttpRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   app.get('/profile', { preHandler: [requireAuth] }, async (request) => {
     const userId = request.user!.id
-    const [ratings, stacks, season] = await Promise.all([
+    const [ratingRows, stacks, season] = await Promise.all([
       getUserRatings(request.server.db, userId),
       listStacks(request.server.db),
       getCurrentSeason(request.server.db),
     ])
-    return { ratings, stacks, season }
+    // Sanitized view: tier withheld while unranked, placement progress
+    // derived server-side. Raw DB rows are never serialized.
+    return {
+      ratings: ratingRows.map(toSelfRatingView),
+      stacks,
+      season,
+    }
   })
 
   app.patch('/profile', { preHandler: [requireAuth] }, async (request) => {

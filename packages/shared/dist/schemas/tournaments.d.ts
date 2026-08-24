@@ -10,19 +10,19 @@ export declare const createTournamentSchema: z.ZodObject<{
     registrationClosesAt: z.ZodDate;
     startsAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
-    slug: string;
     name: string;
-    format: "single_elimination" | "double_elimination" | "round_robin";
     stackId: string;
+    slug: string;
+    format: "single_elimination" | "double_elimination" | "round_robin";
     maxParticipants: number;
     registrationOpensAt: Date;
     registrationClosesAt: Date;
     startsAt: Date;
     descriptionMd?: string | undefined;
 }, {
-    slug: string;
     name: string;
     stackId: string;
+    slug: string;
     maxParticipants: number;
     registrationOpensAt: Date;
     registrationClosesAt: Date;

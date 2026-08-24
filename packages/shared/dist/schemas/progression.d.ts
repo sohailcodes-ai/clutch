@@ -46,14 +46,14 @@ export declare const updateProfileSchemaWithSecureAvatar: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     handle?: string | undefined;
     displayName?: string | undefined;
+    avatarUrl?: string | undefined;
     region?: string | undefined;
     bio?: string | undefined;
-    avatarUrl?: string | undefined;
 }, {
     handle?: string | undefined;
     displayName?: string | undefined;
+    avatarUrl?: string | undefined;
     region?: string | undefined;
     bio?: string | undefined;
-    avatarUrl?: string | undefined;
 }>;
 //# sourceMappingURL=progression.d.ts.map

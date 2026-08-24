@@ -2,11 +2,13 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '@clutch/db'
 import { schema } from '@clutch/db'
 import {
+  PLACEMENT_MATCHES,
   sanitizeRecentMatch,
   type PlayerCard,
   type RecentMatchCard,
 } from '@clutch/shared'
 import { getUserRatings } from '../profile/service.js'
+import { buildCompetitiveIdentity, competitiveStatusOf, placementMatchesCompleted } from '../rating/placement.js'
 
 const FINISHED_STATUSES = ['resolved', 'draw', 'abandoned'] as const
 
@@ -41,9 +43,23 @@ export async function getPlayerCard(db: Database, userId: string): Promise<Playe
   )
   const peakRating = ratings.reduce((m, r) => Math.max(m, r.peakRating), 0)
 
-  // Global rank from the authoritative rating system: position of the
-  // player's best stack rating among all players' best stack ratings.
-  const globalRank = await computeGlobalRank(db, userId)
+  // Competitive identity comes from the player's primary stack when set,
+  // otherwise their best-rated stack. Server-authoritative: an unranked
+  // player gets no tier and no global rank, ever.
+  const identityStack =
+    ratings.find((r) => r.stackId === profile.primaryStackId) ?? best
+  const identity = identityStack
+    ? buildCompetitiveIdentity(identityStack)
+    : {
+        competitiveStatus: 'unranked' as const,
+        placementMatchesRequired: PLACEMENT_MATCHES,
+        placementMatchesCompleted: 0,
+        placementRemaining: PLACEMENT_MATCHES,
+      }
+
+  // Global rank exists only for ranked players, computed among ranked peers.
+  const globalRank =
+    identity.competitiveStatus === 'ranked' ? await computeGlobalRank(db, userId) : null
 
   const games = totals.gamesPlayed
   const decided = totals.wins + totals.losses
@@ -59,9 +75,11 @@ export async function getPlayerCard(db: Database, userId: string): Promise<Playe
           rarity: profile.equippedTitle.rarity,
         }
       : null,
+    ...identity,
     bestRating: best?.rating ?? 1000,
     bestStackId: best?.stackId ?? null,
-    tierId: best?.tierId ?? null,
+    // Never expose a tier to an unranked player.
+    tierId: identity.competitiveStatus === 'ranked' ? best?.tierId ?? null : null,
     globalRank,
     wins: totals.wins,
     losses: totals.losses,
@@ -78,14 +96,18 @@ export async function computeGlobalRank(
 ): Promise<number | null> {
   const mine = await db.query.userStackRatings.findMany({
     where: eq(schema.userStackRatings.userId, userId),
-    columns: { rating: true },
   })
   if (mine.length === 0) return null
-  const myBest = Math.max(...mine.map((r) => r.rating))
+  const rankedRows = mine.filter((r) => competitiveStatusOf(r.placementRemaining) === 'ranked')
+  if (rankedRows.length === 0) return null
+  const myBest = Math.max(...rankedRows.map((r) => r.rating))
 
+  // Rank counts only RANKED players — in-placement players are excluded from
+  // the population so they can neither hold nor distort a global rank.
   const betterRows = await db
     .select({ uid: schema.userStackRatings.userId })
     .from(schema.userStackRatings)
+    .where(eq(schema.userStackRatings.placementRemaining, 0))
     .groupBy(schema.userStackRatings.userId)
     .having(sql`MAX(${schema.userStackRatings.rating}) > ${myBest}`)
   return betterRows.length + 1
@@ -184,13 +206,14 @@ export async function getDashboard(db: Database, userId: string) {
     ratings: ratings.map((r) => ({
       stackId: r.stackId,
       rating: r.rating,
-      tierId: r.tierId,
+      tierId: competitiveStatusOf(r.placementRemaining) === 'ranked' ? r.tierId : null,
       gamesPlayed: r.gamesPlayed,
       wins: r.wins,
       losses: r.losses,
       draws: r.draws,
       peakRating: r.peakRating,
       placementRemaining: r.placementRemaining,
+      placementCompleted: placementMatchesCompleted(r.placementRemaining),
     })),
     serverTimeMs: Date.now(),
   }

@@ -232,6 +232,10 @@ export declare function getQuestionStats(db: DbExecutor, questionId: string): Pr
 export type SelectOptions = {
     /** Queue-entry difficulty preference (validated against DB bands). */
     preferredDifficultyId?: string | null;
+    /** Fewest placement matches remaining across the pairing. >0 biases the
+     *  starting band toward accessible content; adaptive accuracy adjustment
+     *  still applies on top. Derived server-side from authoritative ratings. */
+    placementRemainingMin?: number;
 };
 type Band = typeof schema.difficultyBands.$inferSelect;
 /** Deterministic adaptive band choice from ratings + recent accuracy. */

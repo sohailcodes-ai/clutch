@@ -1,5 +1,6 @@
 import { and, countDistinct, eq, inArray, sql } from 'drizzle-orm';
 import { schema } from '@clutch/db';
+import { placementTargetShift } from '../rating/placement.js';
 import { AppError, ErrorCodes, } from '@clutch/shared';
 // ---------------------------------------------------------------------------
 // Pure selection primitives — unit-testable and deterministic
@@ -447,6 +448,11 @@ export async function selectQuestionForMatch(db, stackId, avgRating, userIds, op
         : ratingBand
             ? bands.indexOf(ratingBand)
             : Math.floor(bands.length / 2);
+    // Placement calibration: start accessible, converge to adaptive as
+    // placement matches are consumed (deterministic, server-authoritative).
+    if (options.placementRemainingMin != null && !preferredBand) {
+        baseIndex = Math.max(0, baseIndex - placementTargetShift(options.placementRemainingMin));
+    }
     // Adaptive adjustment from recent per-user solve rates (deterministic).
     const accuracies = [];
     for (const userId of userIds) {

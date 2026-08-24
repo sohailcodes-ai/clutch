@@ -1,7 +1,7 @@
 import type { Redis } from 'ioredis';
 import type { Database } from '@clutch/db';
-export declare function ratingBucket(rating: number): number;
-export declare function expandedBand(baseBucket: number, waitSeconds: number): {
+export declare function ratingBucket(rating: number, bandSize?: number): number;
+export declare function expandedBand(baseBucket: number, waitSeconds: number, initialBand?: number): {
     min: number;
     max: number;
 };
@@ -11,29 +11,29 @@ export declare function joinQueue(db: Database, redis: Redis, input: {
     difficultyId?: string;
 }): Promise<{
     id: string;
-    status: "matched" | "cancelled" | "waiting" | "expired";
     userId: string;
-    region: string;
     stackId: string;
-    rating: number;
     seasonId: string;
+    rating: number;
+    region: string;
     difficultyId: string | null;
-    matchId: string | null;
+    status: "matched" | "cancelled" | "waiting" | "expired";
     enqueuedAt: Date;
     matchedAt: Date | null;
+    matchId: string | null;
 }>;
 export declare function leaveQueue(db: Database, redis: Redis, userId: string): Promise<{
     id: string;
-    status: "matched" | "cancelled" | "waiting" | "expired";
     userId: string;
-    region: string;
     stackId: string;
-    rating: number;
     seasonId: string;
+    rating: number;
+    region: string;
     difficultyId: string | null;
-    matchId: string | null;
+    status: "matched" | "cancelled" | "waiting" | "expired";
     enqueuedAt: Date;
     matchedAt: Date | null;
+    matchId: string | null;
 }>;
 /**
  * Attempts to pair the two oldest compatible entries in a season/stack queue.
@@ -47,12 +47,12 @@ export declare function leaveQueue(db: Database, redis: Redis, userId: string): 
  */
 export declare function tryPairQueue(db: Database, redis: Redis, seasonId: string, stackId: string): Promise<{
     id: string;
-    status: "active" | "queued" | "matched" | "starting" | "evaluating" | "resolved" | "cancelled" | "abandoned" | "draw";
-    createdAt: Date;
-    endsAt: Date | null;
     stackId: string;
     seasonId: string;
     difficultyId: string;
+    status: "matched" | "cancelled" | "active" | "queued" | "starting" | "evaluating" | "resolved" | "abandoned" | "draw";
+    createdAt: Date;
+    endsAt: Date | null;
     timeLimitSec: number;
     version: number;
     questionVersionId: string;
@@ -68,15 +68,15 @@ export declare function tryPairQueue(db: Database, redis: Redis, seasonId: strin
 } | null>;
 export declare function getQueueStatus(db: Database, userId: string): Promise<{
     id: string;
-    status: "matched" | "cancelled" | "waiting" | "expired";
     userId: string;
-    region: string;
     stackId: string;
-    rating: number;
     seasonId: string;
+    rating: number;
+    region: string;
     difficultyId: string | null;
-    matchId: string | null;
+    status: "matched" | "cancelled" | "waiting" | "expired";
     enqueuedAt: Date;
     matchedAt: Date | null;
+    matchId: string | null;
 } | undefined>;
 //# sourceMappingURL=service.d.ts.map
