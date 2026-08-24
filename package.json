@@ -1,0 +1,25 @@
+{
+    "name":  "clutch",
+    "version":  "0.1.0",
+    "private":  true,
+    "scripts":  {
+                    "dev":  "turbo dev",
+                    "dev:web":  "turbo dev --filter=@clutch/web",
+                    "dev:api":  "turbo dev --filter=@clutch/api",
+                    "dev:worker":  "turbo dev --filter=@clutch/worker",
+                    "build":  "turbo build",
+                    "db:generate":  "pnpm --filter @clutch/db generate",
+                    "db:migrate":  "pnpm --filter @clutch/db migrate",
+                    "db:seed":  "pnpm --filter @clutch/db seed",
+                    "db:studio":  "pnpm --filter @clutch/db studio",
+                    "infra:up":  "docker compose -f infra/docker-compose.yml up -d",
+                    "infra:down":  "docker compose -f infra/docker-compose.yml down",
+                    "test":  "vitest run"
+                },
+    "devDependencies":  {
+                            "turbo":  "^2.5.4",
+                            "typescript":  "5.7.3",
+                            "vitest":  "^4.1.11"
+                        },
+    "packageManager":  "pnpm@10.12.1"
+}

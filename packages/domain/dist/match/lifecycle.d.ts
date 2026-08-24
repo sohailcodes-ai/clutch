@@ -1,0 +1,194 @@
+import type { Redis } from 'ioredis';
+import type { Database } from '@clutch/db';
+export declare function getMatchSnapshot(db: Database, matchId: string, viewerUserId: string): Promise<{
+    questionVersion: {
+        testCases: {
+            id: string;
+            memoryLimitMb: number | null;
+            questionVersionId: string;
+            ordinal: number;
+            visibility: "public" | "hidden";
+            input: string;
+            expectedOutput: string;
+            weight: number;
+            timeLimitMs: number | null;
+        }[];
+        id: string;
+        questionId: string;
+        version: number;
+        promptMd: string;
+        examples: unknown;
+        starterCode: unknown;
+        constraints: unknown;
+        publishedAt: Date | null;
+        question: {
+            id: string;
+            status: "draft" | "published" | "retired";
+            createdAt: Date;
+            title: string;
+            slug: string;
+            descriptionMd: string | null;
+            difficultyId: string;
+            topic: string;
+            tags: unknown;
+            source: string;
+            license: string | null;
+            attribution: string | null;
+            timeLimitSec: number;
+            memoryLimitMb: number;
+        };
+    };
+    submissions: {
+        id: string;
+        status: "queued" | "received" | "running" | "accepted" | "wrong_answer" | "time_limit" | "runtime_error" | "compile_error" | "internal_error";
+        createdAt: Date;
+        userId: string;
+        questionVersionId: string;
+        matchId: string;
+        sourceCode: string;
+        language: string;
+        passedCount: number;
+        totalCount: number;
+        executionTimeMs: number | null;
+        memoryKb: number | null;
+        isFinal: boolean;
+        idempotencyKey: string;
+    }[];
+    opponent: {
+        id: string;
+        userId: string;
+        matchId: string;
+        slot: number;
+        ratingBefore: number;
+        ratingAfter: number | null;
+        result: "draw" | "win" | "loss" | "forfeit" | "no_result" | null;
+        joinedAt: Date;
+        readyAt: Date | null;
+        disconnectedAt: Date | null;
+        user: {
+            id: string;
+            email: string;
+            passwordHash: string;
+            emailVerifiedAt: Date | null;
+            status: "active" | "suspended" | "banned";
+            role: string;
+            createdAt: Date;
+            updatedAt: Date;
+            profile: {
+                createdAt: Date;
+                updatedAt: Date;
+                userId: string;
+                handle: string;
+                displayName: string | null;
+                avatarUrl: string | null;
+                region: string;
+                bio: string | null;
+                equippedTitleId: string | null;
+                onboardingCompletedAt: Date | null;
+                primaryStackId: string | null;
+            };
+        };
+    } | undefined;
+    id: string;
+    status: "active" | "queued" | "matched" | "starting" | "evaluating" | "resolved" | "cancelled" | "abandoned" | "draw";
+    createdAt: Date;
+    endsAt: Date | null;
+    stackId: string;
+    seasonId: string;
+    difficultyId: string;
+    timeLimitSec: number;
+    version: number;
+    questionVersionId: string;
+    publicId: string;
+    startedAt: Date | null;
+    resolvedAt: Date | null;
+    winnerUserId: string | null;
+    resolveReason: string | null;
+    ranked: boolean;
+    roomId: string | null;
+    eventId: string | null;
+    tournamentId: string | null;
+    participants: {
+        id: string;
+        userId: string;
+        matchId: string;
+        slot: number;
+        ratingBefore: number;
+        ratingAfter: number | null;
+        result: "draw" | "win" | "loss" | "forfeit" | "no_result" | null;
+        joinedAt: Date;
+        readyAt: Date | null;
+        disconnectedAt: Date | null;
+        user: {
+            id: string;
+            email: string;
+            passwordHash: string;
+            emailVerifiedAt: Date | null;
+            status: "active" | "suspended" | "banned";
+            role: string;
+            createdAt: Date;
+            updatedAt: Date;
+            profile: {
+                createdAt: Date;
+                updatedAt: Date;
+                userId: string;
+                handle: string;
+                displayName: string | null;
+                avatarUrl: string | null;
+                region: string;
+                bio: string | null;
+                equippedTitleId: string | null;
+                onboardingCompletedAt: Date | null;
+                primaryStackId: string | null;
+            };
+        };
+    }[];
+} | null>;
+export declare function markReady(db: Database, redis: Redis, input: {
+    matchId: string;
+    userId: string;
+}): Promise<{
+    ready: true;
+    active: boolean;
+}>;
+export declare function forfeitMatch(db: Database, redis: Redis, input: {
+    matchId: string;
+    userId: string;
+}): Promise<{
+    winnerUserId: string;
+    reason: "forfeit";
+}>;
+export declare function userHasActiveMatch(db: Database, userId: string): Promise<{
+    id: string;
+    userId: string;
+    matchId: string;
+    slot: number;
+    ratingBefore: number;
+    ratingAfter: number | null;
+    result: "draw" | "win" | "loss" | "forfeit" | "no_result" | null;
+    joinedAt: Date;
+    readyAt: Date | null;
+    disconnectedAt: Date | null;
+    match: {
+        id: string;
+        status: "active" | "queued" | "matched" | "starting" | "evaluating" | "resolved" | "cancelled" | "abandoned" | "draw";
+        createdAt: Date;
+        endsAt: Date | null;
+        stackId: string;
+        seasonId: string;
+        difficultyId: string;
+        timeLimitSec: number;
+        version: number;
+        questionVersionId: string;
+        publicId: string;
+        startedAt: Date | null;
+        resolvedAt: Date | null;
+        winnerUserId: string | null;
+        resolveReason: string | null;
+        ranked: boolean;
+        roomId: string | null;
+        eventId: string | null;
+        tournamentId: string | null;
+    };
+} | undefined>;
+//# sourceMappingURL=lifecycle.d.ts.map

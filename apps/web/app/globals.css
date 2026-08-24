@@ -1,0 +1,206 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-data), ui-monospace, monospace;
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-victory: var(--victory);
+  --color-defeat: var(--defeat);
+  --color-warning: var(--warning);
+  --color-signal: var(--signal);
+
+  --radius-sm: 0px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 4px;
+}
+
+:root {
+  color-scheme: dark;
+
+  --font-display: 'Arial Narrow', 'Helvetica Neue Condensed', 'Roboto Condensed',
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono-data: 'Cascadia Mono', 'JetBrains Mono', 'SFMono-Regular',
+    Consolas, 'Liberation Mono', monospace;
+
+  --background: oklch(0.112 0.006 85);
+  --foreground: oklch(0.938 0.01 86);
+
+  --card: oklch(0.155 0.007 85);
+  --card-foreground: oklch(0.938 0.01 86);
+  --popover: oklch(0.155 0.007 85);
+  --popover-foreground: oklch(0.938 0.01 86);
+
+  --primary: oklch(0.84 0.16 92);
+  --primary-foreground: oklch(0.12 0.012 85);
+
+  --secondary: oklch(0.205 0.01 85);
+  --secondary-foreground: oklch(0.91 0.012 86);
+
+  --muted: oklch(0.188 0.009 85);
+  --muted-foreground: oklch(0.642 0.02 86);
+
+  --accent: oklch(0.755 0.13 174);
+  --accent-foreground: oklch(0.105 0.008 85);
+
+  --destructive: oklch(0.635 0.19 29);
+
+  --border: oklch(1 0 0 / 10%);
+  --border-strong: oklch(1 0 0 / 22%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.84 0.16 92);
+
+  --victory: oklch(0.76 0.16 151);
+  --defeat: oklch(0.64 0.19 29);
+  --warning: oklch(0.83 0.15 72);
+  --signal: oklch(0.72 0.12 214);
+
+  --radius: 2px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'ss01', 'cv01', 'tnum';
+    text-rendering: geometricPrecision;
+  }
+
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
+
+@layer utilities {
+  .clutch-shell {
+    background:
+      linear-gradient(to right, oklch(1 0 0 / 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(1 0 0 / 0.055) 1px, transparent 1px),
+      radial-gradient(circle at 12% 0%, oklch(0.84 0.16 92 / 0.1), transparent 28rem),
+      radial-gradient(circle at 82% 18%, oklch(0.72 0.12 214 / 0.08), transparent 30rem),
+      var(--background);
+    background-size: 72px 72px, 72px 72px, auto, auto, auto;
+  }
+
+  .match-surface {
+    background:
+      linear-gradient(135deg, oklch(1 0 0 / 0.075), transparent 28%),
+      linear-gradient(to bottom, oklch(1 0 0 / 0.035), transparent 56%),
+      oklch(0.145 0.008 85 / 0.92);
+  }
+
+  .scanline {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scanline::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      oklch(1 0 0 / 0.05),
+      transparent
+    );
+    transform: translateY(-100%);
+    animation: scanline 4.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+
+  .text-display {
+    font-weight: 800;
+    letter-spacing: -0.038em;
+    line-height: 0.9;
+    text-transform: uppercase;
+  }
+
+  .label-mono {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .data-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .stack-gold {
+    --stack: var(--primary);
+  }
+
+  .stack-cyan {
+    --stack: var(--accent);
+  }
+
+  .stack-red {
+    --stack: var(--defeat);
+  }
+
+  .stack-green {
+    --stack: var(--victory);
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  52%,
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

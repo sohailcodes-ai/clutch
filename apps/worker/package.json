@@ -1,0 +1,24 @@
+{
+  "name": "@clutch/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@clutch/db": "workspace:*",
+    "@clutch/domain": "workspace:*",
+    "@clutch/shared": "workspace:*",
+    "bullmq": "^5.56.3",
+    "dotenv": "^16.5.0",
+    "drizzle-orm": "^0.44.2",
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.3",
+    "typescript": "5.7.3"
+  }
+}

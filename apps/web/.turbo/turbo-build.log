@@ -1,0 +1,53 @@
+
+> @clutch/web@0.1.0 build C:\Users\SOHAIL\Desktop\Clutch\clutch\apps\web
+> next build
+
+   ▲ Next.js 15.5.23
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 20.0s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/21) ...
+   Generating static pages (5/21) 
+   Generating static pages (10/21) 
+   Generating static pages (15/21) 
+ ✓ Generating static pages (21/21)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+┌ ○ /                                    57.6 kB         174 kB
+├ ○ /_not-found                            998 B         103 kB
+├ ○ /admin                               4.58 kB         124 kB
+├ ○ /admin/audit                         4.33 kB         124 kB
+├ ○ /admin/events                        4.77 kB         124 kB
+├ ○ /admin/matches                       4.28 kB         124 kB
+├ ƒ /admin/matches/[id]                  5.87 kB         125 kB
+├ ○ /admin/moderation                    4.12 kB         123 kB
+├ ○ /admin/questions                     4.32 kB         124 kB
+├ ○ /admin/tournaments                   4.81 kB         124 kB
+├ ○ /admin/users                         4.29 kB         124 kB
+├ ƒ /admin/users/[userId]                 4.6 kB         124 kB
+├ ○ /events                              4.56 kB         124 kB
+├ ○ /explore                             1.98 kB         125 kB
+├ ○ /home                                   3 kB         127 kB
+├ ○ /leaderboard                         4.53 kB         124 kB
+├ ○ /login                               20.1 kB         136 kB
+├ ƒ /match/[id]                          6.94 kB         126 kB
+├ ○ /onboarding                          5.82 kB         122 kB
+├ ƒ /profile/[handle]                      925 B         125 kB
+├ ○ /rooms                               1.36 kB         125 kB
+├ ƒ /rooms/[id]                          1.43 kB         125 kB
+├ ƒ /spectate/[publicId]                 4.19 kB         123 kB
+├ ○ /titles                              4.65 kB         124 kB
+└ ○ /tournaments                         4.43 kB         124 kB
++ First Load JS shared by all             102 kB
+  ├ chunks/398-a37e47a85ec782c9.js       45.6 kB
+  ├ chunks/a6cdfd26-fcb06fca978b97f8.js  54.2 kB
+  └ other shared chunks (total)          1.99 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
