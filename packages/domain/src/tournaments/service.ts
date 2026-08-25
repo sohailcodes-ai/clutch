@@ -6,17 +6,19 @@ import {
   ErrorCodes,
   canRegisterForTournament,
   type CreateTournamentInput,
+  type UpdateTournamentInput,
 } from '@clutch/shared'
+import { generateBracket, createRoundMatches, advanceTournament, getTournamentBracket } from './bracket.js'
+import { publishTournamentEvent } from '../realtime/pubsub.js'
+import { writeAuditLog } from '../audit.js'
 
 /**
- * Tournament FOUNDATION. Provides tournaments, registrations, rounds and
- * match association (matches.tournament_id). Full automated bracket
- * generation/seeding is intentionally out of scope for this increment; the
- * data model and registration lifecycle here are the contract that bracket
- * automation will build on. See "Remaining work" in the repo report.
+ * Tournament service. Provides tournaments, registrations, rounds, bracket
+ * generation and lifecycle management. Integrates with the existing match
+ * engine for actual competitive play.
  */
 
-export async function createTournament(db: Database, input: CreateTournamentInput) {
+export async function createTournament(db: Database, redis: import('ioredis').Redis, input: CreateTournamentInput) {
   if (input.registrationClosesAt > input.startsAt) {
     throw new AppError(
       ErrorCodes.VALIDATION,
@@ -48,7 +50,56 @@ export async function createTournament(db: Database, input: CreateTournamentInpu
     })
     .returning()
 
+  if (!tournament) throw new AppError(ErrorCodes.INTERNAL, 'Failed to create tournament', 500)
+
+  await publishTournamentEvent(redis, tournament.id, {
+    type: 'tournament.created',
+    payload: { tournamentId: tournament.id, slug: tournament.slug, name: tournament.name },
+  })
+
   return tournament
+}
+
+export async function updateTournament(
+  db: Database,
+  redis: import('ioredis').Redis,
+  slug: string,
+  adminUserId: string,
+  input: UpdateTournamentInput,
+) {
+  const tournament = await db.query.tournaments.findFirst({
+    where: eq(schema.tournaments.slug, slug),
+  })
+  if (!tournament) throw new AppError(ErrorCodes.NOT_FOUND, 'Tournament not found', 404)
+  if (!['draft', 'registration_open'].includes(tournament.status)) {
+    throw new AppError(ErrorCodes.CONFLICT, 'Tournament cannot be edited in current status', 409)
+  }
+
+  const updates: Record<string, unknown> = {}
+  if (input.name !== undefined) updates.name = input.name
+  if (input.descriptionMd !== undefined) updates.descriptionMd = input.descriptionMd
+  if (input.maxParticipants !== undefined) updates.maxParticipants = input.maxParticipants
+  if (input.startsAt !== undefined) updates.startsAt = input.startsAt
+
+  if (Object.keys(updates).length > 0) {
+    await db.update(schema.tournaments).set(updates).where(eq(schema.tournaments.id, tournament.id))
+  }
+
+  await publishTournamentEvent(redis, tournament.id, {
+    type: 'tournament.updated',
+    actorUserId: adminUserId,
+    payload: { tournamentId: tournament.id, slug, updates: Object.keys(updates) },
+  })
+
+  await writeAuditLog(db, {
+    actorUserId: adminUserId,
+    action: 'admin.tournament.update',
+    resourceType: 'tournament',
+    resourceId: slug,
+    metadata: { updates },
+  })
+
+  return { updated: true }
 }
 
 export async function listTournaments(db: Database, limit = 20, offset = 0) {
@@ -212,6 +263,9 @@ export async function seedRounds(
   }
 
   await db.transaction(async (tx) => {
+    await tx.delete(schema.tournamentBracketNodes).where(
+      eq(schema.tournamentBracketNodes.tournamentId, tournament.id),
+    )
     await tx.delete(schema.tournamentRounds).where(eq(schema.tournamentRounds.tournamentId, tournament.id))
     await tx.insert(schema.tournamentRounds).values(
       roundNames.map((name, i) => ({
@@ -236,3 +290,144 @@ export async function seedRounds(
   })
   return rounds
 }
+
+/**
+ * Start a tournament: lock registration, generate bracket, create first-round matches.
+ */
+export async function startTournament(
+  db: Database,
+  redis: import('ioredis').Redis,
+  slug: string,
+  adminUserId: string,
+) {
+  const tournament = await db.query.tournaments.findFirst({
+    where: eq(schema.tournaments.slug, slug),
+  })
+  if (!tournament) throw new AppError(ErrorCodes.NOT_FOUND, 'Tournament not found', 404)
+  if (!['registration_open', 'seeding'].includes(tournament.status)) {
+    throw new AppError(ErrorCodes.CONFLICT, 'Tournament cannot be started in current status', 409)
+  }
+
+  const regCount = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(schema.tournamentRegistrations)
+    .where(eq(schema.tournamentRegistrations.tournamentId, tournament.id))
+  if (Number(regCount[0]?.count ?? 0) < 2) {
+    throw new AppError(ErrorCodes.VALIDATION, 'Need at least 2 participants to start', 400)
+  }
+
+  // Set status to seeding if currently registration_open
+  if (tournament.status === 'registration_open') {
+    await db
+      .update(schema.tournaments)
+      .set({ status: 'seeding' })
+      .where(eq(schema.tournaments.id, tournament.id))
+  }
+
+  // Generate bracket (this also sets status to 'running')
+  const { rounds } = await generateBracket(db, tournament.id)
+
+  // Create first-round matches
+  const { matchCount } = await createRoundMatches(db, redis, tournament.id, 1)
+
+  await writeAuditLog(db, {
+    actorUserId: adminUserId,
+    action: 'admin.tournament.start',
+    resourceType: 'tournament',
+    resourceId: slug,
+    metadata: { rounds: rounds.length, firstRoundMatches: matchCount },
+  })
+
+  await publishTournamentEvent(redis, tournament.id, {
+    type: 'tournament.started',
+    actorUserId: adminUserId,
+    payload: { rounds: rounds.length, firstRoundMatches: matchCount },
+  })
+
+  return { started: true, rounds: rounds.length, firstRoundMatches: matchCount }
+}
+
+/**
+ * Cancel a tournament. Only draft/registration_open/seeding tournaments can be cancelled.
+ */
+export async function cancelTournament(
+  db: Database,
+  redis: import('ioredis').Redis,
+  slug: string,
+  adminUserId: string,
+) {
+  const tournament = await db.query.tournaments.findFirst({
+    where: eq(schema.tournaments.slug, slug),
+  })
+  if (!tournament) throw new AppError(ErrorCodes.NOT_FOUND, 'Tournament not found', 404)
+  if (['completed', 'cancelled'].includes(tournament.status)) {
+    throw new AppError(ErrorCodes.CONFLICT, 'Tournament is already finished', 409)
+  }
+
+  await db
+    .update(schema.tournaments)
+    .set({ status: 'cancelled', endsAt: new Date() })
+    .where(eq(schema.tournaments.id, tournament.id))
+
+  await writeAuditLog(db, {
+    actorUserId: adminUserId,
+    action: 'admin.tournament.cancel',
+    resourceType: 'tournament',
+    resourceId: slug,
+    metadata: { previousStatus: tournament.status },
+  })
+
+  await publishTournamentEvent(redis, tournament.id, {
+    type: 'tournament.cancelled',
+    actorUserId: adminUserId,
+    payload: { previousStatus: tournament.status },
+  })
+
+  return { cancelled: true }
+}
+
+/**
+ * Handle post-match resolution for tournament matches.
+ * Advances the bracket if needed.
+ */
+export async function handleTournamentMatchResolution(
+  db: Database,
+  redis: import('ioredis').Redis,
+  matchId: string,
+): Promise<void> {
+  const match = await db.query.matches.findFirst({
+    where: eq(schema.matches.id, matchId),
+  })
+  if (!match || !match.tournamentId) return
+
+  const result = await advanceTournament(db, redis, matchId)
+
+  if (result.tournamentComplete) {
+    // Award reward titles to the champion if configured
+    const tournament = await db.query.tournaments.findFirst({
+      where: eq(schema.tournaments.id, match.tournamentId),
+    })
+    if (tournament?.championUserId && Array.isArray(tournament.rewardTitleIds) && tournament.rewardTitleIds.length > 0) {
+      for (const titleId of tournament.rewardTitleIds) {
+        await db
+          .insert(schema.userTitles)
+          .values({ userId: tournament.championUserId, titleId })
+          .onConflictDoNothing()
+      }
+    }
+    return
+  }
+
+  if (result.advanced && result.nextMatchCreated) {
+    await publishTournamentEvent(redis, match.tournamentId, {
+      type: 'tournament.match_created',
+      payload: {
+        matchId,
+        winnerUserId: result.winnerUserId,
+        roundNumber: null,
+      },
+    })
+  }
+}
+
+export { getTournamentBracket }

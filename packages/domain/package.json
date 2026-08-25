@@ -21,10 +21,12 @@
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.56.3",
     "drizzle-orm": "^0.44.2",
-    "ioredis": "^5.6.1"
+    "ioredis": "^5.6.1",
+    "nodemailer": "^6.9.16"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/nodemailer": "^6.4.17",
     "typescript": "5.7.3"
   }
 }

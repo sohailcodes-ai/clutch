@@ -1,9 +1,10 @@
 'use client'
 
-import { use, useCallback, useEffect, useMemo, useState } from 'react'
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError, type RunResultDto } from '@/lib/api'
 import { useSession } from '@/lib/session'
+import { useWs } from '@/lib/ws'
 import AppNav from '@/components/clutch/app-nav'
 import SubmissionStateChip, { type SubmissionState } from '@/components/clutch/submission-state'
 import ClutchLogo from '@/components/brand/clutch-logo'
@@ -123,6 +124,8 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
   const [now, setNow] = useState(() => Date.now())
   const [busy, setBusy] = useState(false)
   const [submitMsg, setSubmitMsg] = useState<string | null>(null)
+  const [runResult, setRunResult] = useState<RunResultDto | null>(null)
+  const [runBusy, setRunBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -138,14 +141,56 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
     }
   }, [id])
 
+  // Keep a ref so the WS handler always calls the latest load.
+  const loadRef = useRef(load)
+  loadRef.current = load
+
+  // Timer tick for countdown (1s, independent of WS).
   useEffect(() => {
-    void load()
-    const t = setInterval(() => {
-      setNow(Date.now())
-      void load()
-    }, 3000)
+    const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
-  }, [load])
+  }, [])
+
+  // Subscribe to match WebSocket events and refresh on any match event.
+  const MATCH_EVENTS = useMemo(
+    () =>
+      new Set([
+        'match.found',
+        'match.starting',
+        'match.active',
+        'match.participant_update',
+        'submission.queued',
+        'match.evaluating',
+        'submission.result',
+        'match.resolved',
+        'match.adjudicated',
+        'match.snapshot',
+        'admin.joined',
+        'admin.left',
+      ]),
+    [],
+  )
+
+  const { connected, subscribe } = useWs({
+    onMessage: useCallback(
+      (msg: { type?: string; matchId?: string }) => {
+        if (msg.type && MATCH_EVENTS.has(msg.type) && msg.matchId === id) {
+          void loadRef.current()
+        }
+      },
+      [id, MATCH_EVENTS],
+    ),
+  })
+
+  // Subscribe to match channel once connected.
+  useEffect(() => {
+    if (connected) {
+      subscribe('match.subscribe', { matchId: id })
+    }
+  }, [connected, subscribe, id])
+
+  // Initial load.
+  useEffect(() => { void load() }, [load])
 
   async function ready() {
     setBusy(true)
@@ -159,16 +204,36 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
     }
   }
 
-  async function submit(isFinal: boolean) {
+  async function testRun() {
+    setRunBusy(true)
+    setRunResult(null)
+    setSubmitMsg(null)
+    try {
+      const res = await api.post<RunResultDto>(`/matches/${id}/run`, {
+        sourceCode: code,
+        stdin: '',
+        stackId: match?.stackId ?? '',
+      })
+      setRunResult(res)
+      await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Run failed')
+    } finally {
+      setRunBusy(false)
+    }
+  }
+
+  async function submitFinal() {
     setBusy(true)
     setSubmitMsg(null)
+    setRunResult(null)
     try {
       await api.post(`/matches/${id}/submissions`, {
         sourceCode: code,
-        isFinal,
+        isFinal: true,
         idempotencyKey: crypto.randomUUID(),
       })
-      setSubmitMsg(isFinal ? 'Final submission queued for evaluation.' : 'Test run queued.')
+      setSubmitMsg('Final submission queued for evaluation.')
       await load()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Submission failed')
@@ -442,18 +507,18 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
 
             <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={() => void submit(false)}
-                disabled={busy || match.status !== 'active'}
+                onClick={() => void testRun()}
+                disabled={runBusy || match.status !== 'active'}
                 className="label-mono border border-border-strong px-5 py-2.5 text-[0.65rem] uppercase transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
               >
-                Test run
+                {runBusy ? 'Running…' : 'Test run'}
               </button>
               <button
-                onClick={() => void submit(true)}
+                onClick={() => void submitFinal()}
                 disabled={busy || match.status !== 'active'}
                 className="label-mono border border-border-strong bg-primary px-6 py-2.5 text-[0.65rem] font-bold uppercase text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
               >
-                Final submit
+                {busy ? 'Locking in…' : 'Final submit'}
               </button>
               {match.status === 'evaluating' ? (
                 <span className="label-mono animate-pulse text-[0.62rem] uppercase text-warning">
@@ -464,6 +529,53 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
                 <span className="label-mono text-[0.6rem] text-signal">{submitMsg}</span>
               ) : null}
             </div>
+
+            {/* Run output panel */}
+            {runResult ? (
+              <Panel className="space-y-3">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <SectionTitle>Output</SectionTitle>
+                  <div className="flex items-center gap-3">
+                    <span className={cn(
+                      'label-mono text-[0.58rem] uppercase',
+                      runResult.status === 'accepted' ? 'text-signal' : 'text-defeat',
+                    )}>
+                      {runResult.status.replace(/_/g, ' ')}
+                    </span>
+                    <span className="label-mono text-[0.55rem] text-muted-foreground">
+                      {runResult.executionTimeMs}ms
+                    </span>
+                    {runResult.exitCode !== 0 ? (
+                      <span className="label-mono text-[0.55rem] text-muted-foreground">
+                        exit {runResult.exitCode}
+                      </span>
+                    ) : null}
+                    {runResult.timedOut ? (
+                      <span className="label-mono text-[0.55rem] text-defeat">timeout</span>
+                    ) : null}
+                  </div>
+                </div>
+                {runResult.stdout ? (
+                  <div>
+                    <p className="label-mono mb-1 text-[0.55rem] uppercase text-muted-foreground">stdout</p>
+                    <pre className="max-h-[24vh] overflow-auto whitespace-pre-wrap border border-border/60 bg-background/60 p-3 font-mono text-xs leading-relaxed">
+                      {runResult.stdout}
+                    </pre>
+                  </div>
+                ) : null}
+                {runResult.stderr ? (
+                  <div>
+                    <p className="label-mono mb-1 text-[0.55rem] uppercase text-muted-foreground">stderr</p>
+                    <pre className="max-h-[16vh] overflow-auto whitespace-pre-wrap border border-defeat/30 bg-defeat/5 p-3 font-mono text-xs leading-relaxed text-defeat">
+                      {runResult.stderr}
+                    </pre>
+                  </div>
+                ) : null}
+                {!runResult.stdout && !runResult.stderr ? (
+                  <p className="text-xs text-muted-foreground">No output.</p>
+                ) : null}
+              </Panel>
+            ) : null}
 
             <Panel>
               <SectionTitle>Submissions</SectionTitle>

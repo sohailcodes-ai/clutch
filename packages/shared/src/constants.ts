@@ -147,6 +147,12 @@ export const ROOM_LIMITS = {
   MAX_OPEN_ROOMS_PER_HOST: 3,
 } as const
 
+export const ROOM_PARTICIPANT_ROLES = ['host', 'player', 'spectator'] as const
+export type RoomParticipantRole = (typeof ROOM_PARTICIPANT_ROLES)[number]
+
+export const ROOM_PARTICIPANT_STATUSES = ['active', 'removed', 'left'] as const
+export type RoomParticipantStatus = (typeof ROOM_PARTICIPANT_STATUSES)[number]
+
 export const QUESTION_SELECTION_MODES = ['random', 'adaptive'] as const
 export type QuestionSelectionMode = (typeof QUESTION_SELECTION_MODES)[number]
 
@@ -173,6 +179,16 @@ export type TournamentStatus = (typeof TOURNAMENT_STATUSES)[number]
 
 export const TOURNAMENT_ROUND_STATUSES = ['pending', 'ready', 'running', 'completed'] as const
 export type TournamentRoundStatus = (typeof TOURNAMENT_ROUND_STATUSES)[number]
+
+export const BRACKET_NODE_STATUSES = ['pending', 'active', 'completed'] as const
+export type BracketNodeStatus = (typeof BRACKET_NODE_STATUSES)[number]
+
+export const TOURNAMENT_LIMITS = {
+  MIN_PARTICIPANTS: 4,
+  MAX_PARTICIPANTS: 1024,
+  MIN_MATCH_DURATION_SEC: 300,
+  MAX_MATCH_DURATION_SEC: 3600,
+} as const
 
 /**
  * ============================================================================

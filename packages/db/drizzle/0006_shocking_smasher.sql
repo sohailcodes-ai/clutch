@@ -1,0 +1,2 @@
+ALTER TABLE "user_stack_ratings" ADD COLUMN "current_win_streak" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_stack_ratings" ADD COLUMN "best_win_streak" integer DEFAULT 0 NOT NULL;

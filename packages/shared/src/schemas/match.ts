@@ -10,5 +10,12 @@ export const matchSubmitSchema = z.object({
   isFinal: z.boolean().default(true),
 })
 
+export const matchRunSchema = z.object({
+  sourceCode: z.string().min(1).max(65536),
+  stdin: z.string().max(65536).default(''),
+  stackId: z.string().min(1).max(32),
+})
+
 export type MatchReadyInput = z.infer<typeof matchReadySchema>
 export type MatchSubmitInput = z.infer<typeof matchSubmitSchema>
+export type MatchRunInput = z.infer<typeof matchRunSchema>

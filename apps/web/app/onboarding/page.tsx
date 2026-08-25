@@ -25,6 +25,7 @@ export default function OnboardingPage() {
   const [avatarUrl, setAvatarUrl] = useState('')
   const [stackId, setStackId] = useState('')
   const [stacks, setStacks] = useState<StackDto[] | null>(null)
+  const [availableLangs, setAvailableLangs] = useState<Set<string>>(new Set())
   const [placementTotal, setPlacementTotal] = useState(5)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -41,12 +42,12 @@ export default function OnboardingPage() {
     setHandle(user.profile?.handle ?? '')
     api
       .get<{ stacks: StackDto[] }>('/meta/stacks')
-      .then((r) => {
-        setStacks(r.stacks)
-        const preferred = r.stacks.find((s) => s.id === user.profile?.primaryStackId)
-        if (preferred) setStackId(preferred.id)
-      })
+      .then((r) => setStacks(r.stacks))
       .catch(() => setError('Could not load supported stacks.'))
+    api
+      .get<{ languages: { id: string }[] }>('/meta/languages')
+      .then((r) => setAvailableLangs(new Set(r.languages.map((l) => l.id))))
+      .catch(() => {})
     // Placement count comes from the backend (server-authoritative).
     api
       .get<{ ratings: { placementMatchesRequired: number }[] }>('/profile')
@@ -57,7 +58,7 @@ export default function OnboardingPage() {
       .catch(() => {})
   }, [user])
 
-  const canContinue = useMemo(() => step !== 2 || stackId !== '', [step, stackId])
+  const canContinue = useMemo(() => step !== 3 || stackId !== '', [step, stackId])
 
   async function finish() {
     setBusy(true)
@@ -232,7 +233,9 @@ export default function OnboardingPage() {
               <Loading label="Loading supported stacks" />
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Primary stack">
-                {stacks.map((s) => (
+                {stacks
+                  .filter((s) => availableLangs.size === 0 || availableLangs.has(s.id))
+                  .map((s) => (
                   <button
                     key={s.id}
                     role="radio"

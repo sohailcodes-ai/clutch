@@ -11,6 +11,7 @@ import {
    completeOnboardingSchema,
   queueJoinSchema,
   matchSubmitSchema,
+  matchRunSchema,
   editorTelemetrySchema,
   listQuestionsQuerySchema,
 } from '@clutch/shared'
@@ -50,6 +51,11 @@ import {
   listActiveTitles,
   getPublicProfile,
   getUserAwards,
+  runCode,
+  getAvailableStackIds,
+  getRuntime,
+  requestVerification,
+  verifyOtp,
 } from '@clutch/domain'
 import { requireAuth } from '../middleware/auth.js'
 
@@ -63,6 +69,7 @@ type PublicUser = {
   status: string
   role: string
   createdAt: Date
+  emailVerifiedAt: Date | null
 }
 
 /** Strips credential material (password hashes) before serialization. */
@@ -73,6 +80,7 @@ function publicUser(user: SessionUser | PublicUser): PublicUser & { profile?: un
     status: user.status,
     role: user.role,
     createdAt: user.createdAt,
+    emailVerifiedAt: user.emailVerifiedAt ?? null,
     profile: (user as SessionUser).profile ?? null,
   }
 }
@@ -140,6 +148,10 @@ export async function registerHttpRoutes(app: FastifyInstance) {
       userAgent: request.headers['user-agent'],
     })
 
+    // Auto-send verification email — fire-and-forget so registration never
+    // fails due to email delivery issues.
+    requestVerification(request.server.db, request.server.redis, user.id).catch(() => {})
+
     // registerUser returns the bare user row; hydrate the profile for the response.
     const profile = await request.server.db.query.userProfiles.findFirst({
       where: eq(schema.userProfiles.userId, user.id),
@@ -178,6 +190,28 @@ export async function registerHttpRoutes(app: FastifyInstance) {
 
   app.get('/auth/me', { preHandler: [requireAuth] }, async (request) => {
     return { user: publicUser(request.user as SessionUser) }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Email verification
+  // ---------------------------------------------------------------------------
+  app.post('/auth/verify/request', { preHandler: [requireAuth] }, async (request, reply) => {
+    await enforceRateLimit(request, {
+      key: `verify:request:${request.user!.id}`,
+      limit: 5,
+      windowSec: 3600,
+      failClosed: true,
+    })
+
+    await requestVerification(request.server.db, request.server.redis, request.user!.id)
+    void reply.code(204)
+    return
+  })
+
+  app.post('/auth/verify/confirm', { preHandler: [requireAuth] }, async (request) => {
+    const input = parse(z.object({ otp: z.string().length(6) }), request.body)
+    const result = await verifyOtp(request.server.db, request.server.redis, request.user!.id, input.otp)
+    return result
   })
 
   // ---------------------------------------------------------------------------
@@ -351,6 +385,15 @@ export async function registerHttpRoutes(app: FastifyInstance) {
     return { stacks: await listStacks(request.server.db) }
   })
 
+  app.get('/meta/languages', async () => {
+    const ids = getAvailableStackIds()
+    const languages = ids.map((id) => {
+      const r = getRuntime(id)
+      return { id, name: r?.name ?? id, compiled: r?.compiled ?? false }
+    })
+    return { languages }
+  })
+
   app.get('/meta/season', async (request) => {
     return { season: await getCurrentSeason(request.server.db) }
   })
@@ -486,6 +529,57 @@ export async function registerHttpRoutes(app: FastifyInstance) {
           isFinal: submission.isFinal,
           createdAt: submission.createdAt,
         },
+      }
+    },
+  )
+
+  // ---------------------------------------------------------------------------
+  // RUN: Execute code against a test case without persisting a formal submission.
+  // This is for the editor's "Run" button — testing against public examples.
+  // ---------------------------------------------------------------------------
+  app.post(
+    '/matches/:matchId/run',
+    { preHandler: [requireAuth] },
+    async (request) => {
+      await enforceRateLimit(request, {
+        key: `run:${request.user!.id}`,
+        limit: 20,
+        windowSec: 60,
+      })
+
+      const { matchId } = parse(z.object({ matchId: z.string().uuid() }), request.params)
+      const input = parse(matchRunSchema, request.body)
+
+      // Authorization: only match participants may run code in a match context.
+      const participant = await request.server.db.query.matchParticipants.findFirst({
+        where: and(
+          eq(schema.matchParticipants.matchId, matchId),
+          eq(schema.matchParticipants.userId, request.user!.id),
+        ),
+      })
+      if (!participant) throw new AppError(ErrorCodes.FORBIDDEN, 'Not a match participant', 403)
+
+      const match = await request.server.db.query.matches.findFirst({
+        where: eq(schema.matches.id, matchId),
+      })
+      if (!match || match.status !== 'active') {
+        throw new AppError(ErrorCodes.MATCH_NOT_ACTIVE, 'Match is not active', 409)
+      }
+
+      // Execute against the provided stdin using the sandbox.
+      const result = await runCode({
+        sourceCode: input.sourceCode,
+        stackId: input.stackId,
+        stdin: input.stdin,
+      })
+
+      return {
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+        timedOut: result.timedOut,
+        executionTimeMs: result.executionTimeMs,
+        status: result.status,
       }
     },
   )

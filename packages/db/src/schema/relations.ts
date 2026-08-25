@@ -30,6 +30,7 @@ import {
   tournaments,
   tournamentRegistrations,
   tournamentRounds,
+  tournamentBracketNodes,
 } from './index.js'
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -196,6 +197,7 @@ export const tournamentsRelations = relations(tournaments, ({ one, many }) => ({
   }),
   registrations: many(tournamentRegistrations),
   rounds: many(tournamentRounds),
+  bracketNodes: many(tournamentBracketNodes),
 }))
 
 export const tournamentRegistrationsRelations = relations(tournamentRegistrations, ({ one }) => ({
@@ -206,9 +208,37 @@ export const tournamentRegistrationsRelations = relations(tournamentRegistration
   user: one(users, { fields: [tournamentRegistrations.userId], references: [users.id] }),
 }))
 
-export const tournamentRoundsRelations = relations(tournamentRounds, ({ one }) => ({
+export const tournamentRoundsRelations = relations(tournamentRounds, ({ one, many }) => ({
   tournament: one(tournaments, {
     fields: [tournamentRounds.tournamentId],
     references: [tournaments.id],
+  }),
+  bracketNodes: many(tournamentBracketNodes),
+}))
+
+export const tournamentBracketNodesRelations = relations(tournamentBracketNodes, ({ one }) => ({
+  tournament: one(tournaments, {
+    fields: [tournamentBracketNodes.tournamentId],
+    references: [tournaments.id],
+  }),
+  round: one(tournamentRounds, {
+    fields: [tournamentBracketNodes.roundId],
+    references: [tournamentRounds.id],
+  }),
+  participantA: one(users, {
+    fields: [tournamentBracketNodes.participantAUserId],
+    references: [users.id],
+  }),
+  participantB: one(users, {
+    fields: [tournamentBracketNodes.participantBUserId],
+    references: [users.id],
+  }),
+  match: one(matches, {
+    fields: [tournamentBracketNodes.matchId],
+    references: [matches.id],
+  }),
+  winner: one(users, {
+    fields: [tournamentBracketNodes.winnerUserId],
+    references: [users.id],
   }),
 }))

@@ -4,6 +4,7 @@ import {
   AppError,
   ErrorCodes,
   createRoomSchema,
+  updateRoomSchema,
   joinRoomSchema,
   listRoomsQuerySchema,
   listEventsQuerySchema,
@@ -16,9 +17,13 @@ import {
   listRecentResults,
   getSpectatorSnapshot,
   createRoom,
+  updateRoom,
   joinRoom,
   leaveRoom,
   setRoomReady,
+  removeRoomParticipant,
+  lockRoom,
+  cancelRoom,
   getRoomDetail,
   listOpenRooms,
   startRoomMatch,
@@ -33,6 +38,7 @@ import {
   registerForTournament,
   unregisterForTournament,
   listParticipants,
+  getTournamentBracket,
 } from '@clutch/domain'
 import { requireAuth } from '../middleware/auth.js'
 
@@ -98,7 +104,7 @@ export async function registerDiscoveryRoutes(app: FastifyInstance) {
   // -------------------------------------------------------------------------
   app.post('/rooms', { preHandler: [requireAuth] }, async (request, reply) => {
     const input = parse(createRoomSchema, request.body)
-    const room = await createRoom(app.db, request.user!.id, input)
+    const room = await createRoom(app.db, app.redis, request.user!.id, input)
     void reply.code(201)
     return { room }
   })
@@ -115,29 +121,35 @@ export async function registerDiscoveryRoutes(app: FastifyInstance) {
     return { room }
   })
 
+  app.patch('/rooms/:roomId', { preHandler: [requireAuth] }, async (request) => {
+    const { roomId } = parse(z.object({ roomId: z.string().uuid() }), request.params)
+    const input = parse(updateRoomSchema, request.body)
+    return updateRoom(app.db, app.redis, roomId, request.user!.id, input)
+  })
+
   app.post('/rooms/:roomId/join', { preHandler: [requireAuth] }, async (request) => {
     const { roomId } = parse(z.object({ roomId: z.string().uuid() }), request.params)
     const body = joinRoomSchema.safeParse(request.body ?? {})
-    const result = await joinRoom(app.db, roomId, request.user!.id, body.success ? body.data.joinCode : undefined)
+    const result = await joinRoom(app.db, app.redis, roomId, request.user!.id, body.success ? body.data.joinCode : undefined)
     return result
   })
 
   app.delete('/rooms/:roomId/leave', { preHandler: [requireAuth] }, async (request) => {
     const { roomId } = parse(z.object({ roomId: z.string().uuid() }), request.params)
-    return leaveRoom(app.db, roomId, request.user!.id)
+    return leaveRoom(app.db, app.redis, roomId, request.user!.id)
   })
 
   app.post('/rooms/:roomId/ready', { preHandler: [requireAuth] }, async (request) => {
     const { roomId } = parse(z.object({ roomId: z.string().uuid() }), request.params)
     const input = parse(z.object({ ready: z.boolean() }), request.body)
-    return setRoomReady(app.db, roomId, request.user!.id, input.ready)
+    return setRoomReady(app.db, app.redis, roomId, request.user!.id, input.ready)
   })
 
   app.post('/rooms/:roomId/start', { preHandler: [requireAuth] }, async (request, reply) => {
     const { roomId } = parse(z.object({ roomId: z.string().uuid() }), request.params)
     const season = await getCurrentSeason(app.db)
     if (!season) throw new AppError(ErrorCodes.CONFLICT, 'No active season', 409)
-    const match = await startRoomMatch(
+    const result = await startRoomMatch(
       app.db,
       app.redis,
       season.id,
@@ -145,7 +157,25 @@ export async function registerDiscoveryRoutes(app: FastifyInstance) {
       request.user!.id,
     )
     void reply.code(201)
-    return { match: { id: match.id, publicId: match.publicId } }
+    return result
+  })
+
+  app.post('/rooms/:roomId/lock', { preHandler: [requireAuth] }, async (request) => {
+    const { roomId } = parse(z.object({ roomId: z.string().uuid() }), request.params)
+    return lockRoom(app.db, app.redis, roomId, request.user!.id)
+  })
+
+  app.post('/rooms/:roomId/cancel', { preHandler: [requireAuth] }, async (request) => {
+    const { roomId } = parse(z.object({ roomId: z.string().uuid() }), request.params)
+    return cancelRoom(app.db, app.redis, roomId, request.user!.id)
+  })
+
+  app.delete('/rooms/:roomId/participants/:userId', { preHandler: [requireAuth] }, async (request) => {
+    const { roomId, userId } = parse(
+      z.object({ roomId: z.string().uuid(), userId: z.string().uuid() }),
+      request.params,
+    )
+    return removeRoomParticipant(app.db, app.redis, roomId, request.user!.id, userId)
   })
 
   // -------------------------------------------------------------------------
@@ -211,5 +241,15 @@ export async function registerDiscoveryRoutes(app: FastifyInstance) {
   app.get('/tournaments/:slug/participants', async (request) => {
     const { slug } = parse(z.object({ slug: z.string().min(3).max(64) }), request.params)
     return { participants: await listParticipants(app.db, slug) }
+  })
+
+  app.get('/tournaments/:slug/bracket', async (request) => {
+    const { slug } = parse(z.object({ slug: z.string().min(3).max(64) }), request.params)
+    const tournament = await app.db.query.tournaments.findFirst({
+      where: (t, { eq }) => eq(t.slug, slug),
+    })
+    if (!tournament) throw new AppError(ErrorCodes.NOT_FOUND, 'Tournament not found', 404)
+    const bracket = await getTournamentBracket(app.db, tournament.id)
+    return { bracket }
   })
 }

@@ -75,6 +75,8 @@ describe('player card DTO contract', () => {
     gamesPlayed: 38,
     peakRating: 1384,
     winRate: 0.686,
+    currentWinStreak: 4,
+    bestWinStreak: 7,
     competitiveStatus: 'ranked',
     placementMatchesRequired: 5,
     placementMatchesCompleted: 5,

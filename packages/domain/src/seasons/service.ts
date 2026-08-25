@@ -17,7 +17,16 @@ export async function rolloverSeason(db: Database) {
     if (archived.length === 0) return null
 
     const ratings = await tx.query.userStackRatings.findMany()
+
+    // Compute final ranks: only ranked players (placementRemaining === 0) get a rank.
+    const ranked = ratings
+      .filter((r) => r.placementRemaining === 0)
+      .sort((a, b) => b.rating - a.rating)
+    const rankMap = new Map<string, number>()
+    ranked.forEach((r, i) => rankMap.set(`${r.userId}:${r.stackId}`, i + 1))
+
     for (const row of ratings) {
+      const finalRank = rankMap.get(`${row.userId}:${row.stackId}`) ?? null
       const resetRating = Math.floor(row.rating * SEASON_SOFT_RESET_FACTOR) + 200
       await tx.insert(schema.seasonRatingSnapshots).values({
         seasonId: active.id,
@@ -27,6 +36,7 @@ export async function rolloverSeason(db: Database) {
         endRating: row.rating,
         peakRating: row.peakRating,
         gamesPlayed: row.gamesPlayed,
+        finalRank,
       })
 
       await tx
@@ -34,6 +44,8 @@ export async function rolloverSeason(db: Database) {
         .set({
           rating: resetRating,
           peakRating: resetRating,
+          currentWinStreak: 0,
+          bestWinStreak: 0,
           placementRemaining: PLACEMENT_MATCHES,
           updatedAt: new Date(),
         })

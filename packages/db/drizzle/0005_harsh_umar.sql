@@ -1,0 +1,1 @@
+ALTER TABLE "tournaments" ADD COLUMN "time_limit_sec" integer DEFAULT 900 NOT NULL;

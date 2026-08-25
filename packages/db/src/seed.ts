@@ -434,23 +434,51 @@ async function main() {
   // secrets hide their condition until unlocked.
   // ------------------------------------------------------------------
   const titleRows = [
+    // === PROGRESSION ===
     { code: 'on_the_board', name: 'On The Board', description: 'Complete your first ranked match.', kind: 'badge', rarity: 'common' as const, isSecret: false, sortOrder: 1, criteria: { type: 'matches', value: 1 } },
+    { code: 'veteran', name: 'Veteran', description: 'Complete 100 ranked matches.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 13, criteria: { type: 'matches', value: 100 } },
+    { code: 'high_volume', name: 'Executioner', description: 'Win 100 ranked matches.', kind: 'title', rarity: 'legendary' as const, isSecret: false, sortOrder: 30, criteria: { type: 'high_volume_wins', value: 100 } },
+
+    // === PERFORMANCE ===
     { code: 'first_blood', name: 'First Blood', description: 'Win a judged match without letting your opponent pass a single test.', kind: 'badge', rarity: 'uncommon' as const, isSecret: false, sortOrder: 2, criteria: { type: 'first_blood' } },
     { code: 'problem_solver', name: 'Problem Slayer', description: 'Solve 50 unique questions.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 3, criteria: { type: 'unique_solved', value: 50 } },
+    { code: 'clean_sweep', name: 'Clean Sweep', description: 'Win 10 matches where every test passes on your final submission.', kind: 'title', rarity: 'rare' as const, isSecret: false, sortOrder: 20, criteria: { type: 'clean_sweeps', value: 10 } },
+    { code: 'perfect_form', name: 'Perfect Form', description: 'Win 20 matches with a perfect first-try submission.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 21, criteria: { type: 'perfect_execution', value: 20 } },
+
+    // === STREAKS ===
     { code: 'hot_streak', name: 'Hot Streak', description: 'Win 5 ranked matches in a row.', kind: 'title', rarity: 'rare' as const, isSecret: false, sortOrder: 4, criteria: { type: 'win_streak', value: 5 } },
     { code: 'unbroken', name: 'Unbroken', description: 'Win 10 ranked matches in a row.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 5, criteria: { type: 'win_streak', value: 10 } },
     { code: 'untouchable', name: 'Untouchable', description: 'Maintain an exceptional win streak.', kind: 'title', rarity: 'legendary' as const, isSecret: true, sortOrder: 6, criteria: { type: 'win_streak', value: 20 } },
+
+    // === CLUTCH / PRESSURE ===
     { code: 'clutch_comeback', name: 'Clutch', description: 'Win a match after being significantly behind.', kind: 'title', rarity: 'rare' as const, isSecret: true, sortOrder: 7, criteria: { type: 'comeback' } },
+    { code: 'cold_blooded', name: 'Cold Blooded', description: 'Win 3 consecutive comeback victories.', kind: 'title', rarity: 'epic' as const, isSecret: true, sortOrder: 22, criteria: { type: 'comeback_streak', value: 3 } },
+
+    // === SPEED ===
     { code: 'speed_demon', name: 'Speed Demon', description: 'Land a fully-accepted solve in under 60 seconds.', kind: 'badge', rarity: 'rare' as const, isSecret: true, sortOrder: 8, criteria: { type: 'fast_win', value: 60000 } },
     { code: 'code_phantom', name: 'Code Phantom', description: '???', kind: 'title', rarity: 'legendary' as const, isSecret: true, sortOrder: 9, criteria: { type: 'first_blood_fast', value: 60000 } },
+
+    // === ADAPTATION ===
     { code: 'polyglot', name: 'Polyglot', description: 'Win ranked matches in 3 different stacks.', kind: 'title', rarity: 'rare' as const, isSecret: false, sortOrder: 10, criteria: { type: 'stacks_won', value: 3 } },
     { code: 'architect', name: 'Architect', description: 'Demonstrate strong performance across 5 different stacks.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 11, criteria: { type: 'stacks_won', value: 5 } },
     { code: 'adaptive', name: 'Adaptive', description: 'Solve questions across 3 difficulty levels.', kind: 'title', rarity: 'rare' as const, isSecret: false, sortOrder: 12, criteria: { type: 'difficulty_climb', value: 3 } },
-    { code: 'veteran', name: 'Veteran', description: 'Complete 100 ranked matches.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 13, criteria: { type: 'matches', value: 100 } },
-    { code: 'top_100', name: 'Top 100', description: 'Reach the global top 100.', kind: 'title', rarity: 'rare' as const, isSecret: false, sortOrder: 14, criteria: { type: 'top_rank', value: 100 } },
-    { code: 'top_20', name: 'Top 20', description: 'Reach the global top 20.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 15, criteria: { type: 'top_rank', value: 20 } },
-    { code: 'diamond_tier', name: 'Diamond Tier', description: 'Reach a peak rating of 2200 in any stack.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 16, criteria: { type: 'rating', value: 2200 } },
-    { code: 'clutch_master', name: 'CLUTCH', description: 'Reach a peak rating of 2400 in any stack — the highest competitive achievement.', kind: 'title', rarity: 'legendary' as const, isSecret: false, sortOrder: 17, criteria: { type: 'rating', value: 2400 } },
+
+    // === UNDERDOG ===
+    { code: 'underdog', name: 'Underdog', description: 'Defeat 5 opponents rated 200+ points above you.', kind: 'title', rarity: 'rare' as const, isSecret: false, sortOrder: 23, criteria: { type: 'underdog_wins', value: 5 } },
+    { code: 'predator', name: 'Predator', description: 'Defeat 15 opponents rated 200+ points above you.', kind: 'title', rarity: 'legendary' as const, isSecret: true, sortOrder: 24, criteria: { type: 'underdog_wins', value: 15 } },
+
+    // === RATING ===
+    { code: 'rising', name: 'Rising', description: 'Win 10 matches.', kind: 'badge', rarity: 'common' as const, isSecret: false, sortOrder: 14, criteria: { type: 'wins', value: 10 } },
+    { code: 'top_100', name: 'Top 100', description: 'Reach the global top 100.', kind: 'title', rarity: 'rare' as const, isSecret: false, sortOrder: 15, criteria: { type: 'top_rank', value: 100 } },
+    { code: 'top_20', name: 'Top 20', description: 'Reach the global top 20.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 16, criteria: { type: 'top_rank', value: 20 } },
+    { code: 'diamond_tier', name: 'Diamond Tier', description: 'Reach a peak rating of 2200 in any stack.', kind: 'title', rarity: 'epic' as const, isSecret: false, sortOrder: 17, criteria: { type: 'rating', value: 2200 } },
+    { code: 'clutch_master', name: 'CLUTCH', description: 'Reach a peak rating of 2400 in any stack — the highest competitive achievement.', kind: 'title', rarity: 'legendary' as const, isSecret: false, sortOrder: 18, criteria: { type: 'rating', value: 2400 } },
+
+    // === NO-SUBMIT ===
+    { code: 'no_submit_wins', name: 'Ghost', description: 'Win 5 matches where your opponent never submitted.', kind: 'title', rarity: 'uncommon' as const, isSecret: false, sortOrder: 25, criteria: { type: 'no_submit_wins', value: 5 } },
+
+    // === HIDDEN ===
+    { code: 'singularity', name: 'Singularity', description: 'Some things are better discovered.', kind: 'title', rarity: 'legendary' as const, isSecret: true, sortOrder: 26, criteria: { type: 'unique_solved', value: 100 } },
   ]
 
   for (const row of titleRows) {

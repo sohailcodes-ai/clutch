@@ -29,6 +29,8 @@ import {
   createEvent,
   createTournament,
   seedRounds,
+  startTournament,
+  cancelTournament,
   writeAuditLog,
   getAdminOverview,
   listAdminMatches,
@@ -330,7 +332,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
   app.post('/admin/tournaments', { preHandler: adminOf('admin.tournaments.manage') }, async (request, reply) => {
     const input = parse(createTournamentSchema, request.body)
-    const tournament = await createTournament(app.db, input)
+    const tournament = await createTournament(app.db, app.redis, input)
     await auditAction(app, request.user!.id, 'admin.tournament.created', 'tournament', tournament?.id ?? '', {
       slug: tournament?.slug ?? null,
     })
@@ -343,6 +345,18 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const rounds = await seedRounds(app.db, slug)
     await auditAction(app, request.user!.id, 'admin.tournament.seeded_rounds', 'tournament', slug)
     return { rounds }
+  })
+
+  app.post('/admin/tournaments/:slug/start', { preHandler: adminOf('admin.tournaments.manage') }, async (request) => {
+    const { slug } = parse(z.object({ slug: z.string().min(3).max(64) }), request.params)
+    const result = await startTournament(app.db, app.redis, slug, request.user!.id)
+    return result
+  })
+
+  app.post('/admin/tournaments/:slug/cancel', { preHandler: adminOf('admin.tournaments.manage') }, async (request) => {
+    const { slug } = parse(z.object({ slug: z.string().min(3).max(64) }), request.params)
+    const result = await cancelTournament(app.db, app.redis, slug, request.user!.id)
+    return result
   })
 
   // -------------------------------------------------------------------------

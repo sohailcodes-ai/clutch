@@ -19,6 +19,7 @@ export default function RoomsPage() {
 
   // create form
   const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
   const [stackId, setStackId] = useState('')
   const [maxPlayers, setMaxPlayers] = useState(8)
   const [isPublic, setIsPublic] = useState(true)
@@ -49,6 +50,7 @@ export default function RoomsPage() {
     try {
       const res = await api.post<{ room: RoomDetailDto }>('/rooms', {
         name,
+        description: description || undefined,
         stackId,
         maxPlayers,
         isPublic,
@@ -79,6 +81,13 @@ export default function RoomsPage() {
                 minLength={3}
                 maxLength={64}
                 placeholder="Python Arena"
+                className="border border-border bg-background px-3 py-2 font-mono text-sm outline-none focus:border-primary"
+              />
+              <input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={500}
+                placeholder="Description (optional)"
                 className="border border-border bg-background px-3 py-2 font-mono text-sm outline-none focus:border-primary"
               />
               <select

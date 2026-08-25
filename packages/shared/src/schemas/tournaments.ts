@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { TOURNAMENT_FORMATS } from '../constants.js'
+import { TOURNAMENT_FORMATS, TOURNAMENT_LIMITS } from '../constants.js'
 
 export const createTournamentSchema = z.object({
   slug: z.string().min(3).max(64).regex(/^[a-z0-9-]+$/),
@@ -7,13 +7,22 @@ export const createTournamentSchema = z.object({
   descriptionMd: z.string().max(8000).optional(),
   format: z.enum(TOURNAMENT_FORMATS).default('single_elimination'),
   stackId: z.string().min(1).max(32),
-  maxParticipants: z.number().int().min(4).max(1024),
+  maxParticipants: z.number().int().min(TOURNAMENT_LIMITS.MIN_PARTICIPANTS).max(TOURNAMENT_LIMITS.MAX_PARTICIPANTS),
   registrationOpensAt: z.coerce.date(),
   registrationClosesAt: z.coerce.date(),
   startsAt: z.coerce.date(),
 })
 
 export type CreateTournamentInput = z.infer<typeof createTournamentSchema>
+
+export const updateTournamentSchema = z.object({
+  name: z.string().min(3).max(120).optional(),
+  descriptionMd: z.string().max(8000).optional(),
+  maxParticipants: z.number().int().min(TOURNAMENT_LIMITS.MIN_PARTICIPANTS).max(TOURNAMENT_LIMITS.MAX_PARTICIPANTS).optional(),
+  startsAt: z.coerce.date().optional(),
+})
+
+export type UpdateTournamentInput = z.infer<typeof updateTournamentSchema>
 
 export const tournamentSlugParamsSchema = z.object({ slug: z.string().min(3).max(64) })
 

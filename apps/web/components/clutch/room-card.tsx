@@ -28,6 +28,9 @@ export function RoomDetailCard({ room }: { room: RoomDetailDto }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-mono text-xl font-bold">{room.name}</h1>
+          {room.description ? (
+            <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{room.description}</p>
+          ) : null}
           <p className="label-mono mt-1 text-[0.65rem] uppercase text-muted-foreground">
             {room.publicId} · host @{room.hostHandle ?? '?'}
           </p>
@@ -37,6 +40,7 @@ export function RoomDetailCard({ room }: { room: RoomDetailDto }) {
           <p>{room.difficultyLabel ?? 'any difficulty'}</p>
           <p>{room.ranked ? 'ranked' : 'unranked'} · {room.timeLimitSec}s</p>
           <p>{room.isPublic ? 'public' : 'private'} · {room.status}</p>
+          {room.lockedAt ? <p>locked at {new Date(room.lockedAt).toLocaleTimeString()}</p> : null}
         </div>
       </div>
 
@@ -45,7 +49,7 @@ export function RoomDetailCard({ room }: { room: RoomDetailDto }) {
           <li key={p.handle ?? p.joinedAt} className="flex items-center justify-between py-2">
             <span className="font-mono text-sm">@{p.handle ?? 'player'}</span>
             <span className="label-mono flex items-center gap-2 text-[0.6rem] uppercase text-muted-foreground">
-              {p.isHost ? 'host' : ''}
+              {p.isHost ? <span className="text-primary">host</span> : p.role === 'spectator' ? 'spectator' : ''}
               {p.readyAt ? (
                 <span className="bg-primary/15 px-1.5 py-0.5 text-primary">ready</span>
               ) : (

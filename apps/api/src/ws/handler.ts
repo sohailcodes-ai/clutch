@@ -11,6 +11,9 @@ import {
   hasActiveObservation,
   markReady,
   setPresence,
+  getRoomDetail,
+  getTournament,
+  getTournamentBracket,
 } from '@clutch/domain'
 
 const clientMessageSchema = z.object({
@@ -267,6 +270,96 @@ export async function registerWsRoutes(app: FastifyInstance) {
                 payload: event.payload,
               })
             }
+            break
+          }
+
+          // --- Room subscriptions ---------------------------------------------
+          case wsClientEvents.ROOM_SUBSCRIBE: {
+            const roomId = (msg as { roomId?: string }).roomId
+            if (!roomId) {
+              sendError(socket, 'roomId required')
+              break
+            }
+            const room = await getRoomDetail(request.server.db, roomId, userId)
+            if (!room) {
+              sendError(socket, 'Room not found or not a participant', 'NOT_FOUND')
+              break
+            }
+            await subscriber.subscribe(`room:${roomId}`)
+            send(socket, {
+              type: 'room.snapshot',
+              id: crypto.randomUUID(),
+              ts: new Date().toISOString(),
+              roomId,
+              payload: { room },
+            })
+            break
+          }
+
+          case wsClientEvents.ROOM_RESYNC: {
+            const roomId = (msg as { roomId?: string }).roomId
+            if (!roomId) {
+              sendError(socket, 'roomId required')
+              break
+            }
+            const roomSnapshot = await getRoomDetail(request.server.db, roomId, userId)
+            if (!roomSnapshot) {
+              sendError(socket, 'Room not found or not a participant', 'NOT_FOUND')
+              break
+            }
+            send(socket, {
+              type: 'room.snapshot',
+              id: crypto.randomUUID(),
+              ts: new Date().toISOString(),
+              roomId,
+              payload: { room: roomSnapshot },
+            })
+            break
+          }
+
+          // --- Tournament subscriptions --------------------------------------
+          case wsClientEvents.TOURNAMENT_SUBSCRIBE: {
+            const tournamentSlug = (msg as { slug?: string }).slug
+            if (!tournamentSlug) {
+              sendError(socket, 'slug required')
+              break
+            }
+            const tournament = await getTournament(request.server.db, tournamentSlug)
+            if (!tournament) {
+              sendError(socket, 'Tournament not found', 'NOT_FOUND')
+              break
+            }
+            const bracket = await getTournamentBracket(request.server.db, tournament.id)
+            await subscriber.subscribe(`tournament:${tournament.id}`)
+            send(socket, {
+              type: 'tournament.snapshot',
+              id: crypto.randomUUID(),
+              ts: new Date().toISOString(),
+              tournamentId: tournament.id,
+              payload: { tournament, bracket },
+            })
+            break
+          }
+
+          case wsClientEvents.TOURNAMENT_RESYNC: {
+            const tournamentSlug = (msg as { slug?: string }).slug
+            if (!tournamentSlug) {
+              sendError(socket, 'slug required')
+              break
+            }
+            const tDetail = await getTournament(request.server.db, tournamentSlug)
+            if (!tDetail) {
+              sendError(socket, 'Tournament not found', 'NOT_FOUND')
+              break
+            }
+            const tBracket = await getTournamentBracket(request.server.db, tDetail.id)
+            send(socket, {
+              type: 'tournament.snapshot',
+              id: crypto.randomUUID(),
+              ts: new Date().toISOString(),
+              tournamentId: tDetail.id,
+              payload: { tournament: tDetail, bracket: tBracket },
+            })
             break
           }
 

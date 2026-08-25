@@ -31,6 +31,8 @@ export const playerCardSchema = z.object({
   gamesPlayed: z.number().int().min(0),
   peakRating: z.number().int().min(0),
   winRate: z.number().min(0).max(1),
+  currentWinStreak: z.number().int().min(0),
+  bestWinStreak: z.number().int().min(0),
 })
 export type PlayerCard = z.infer<typeof playerCardSchema>
 

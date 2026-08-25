@@ -8,6 +8,14 @@ export function matchChannel(matchId: string) {
   return `match:${matchId}`
 }
 
+export function roomChannel(roomId: string) {
+  return `room:${roomId}`
+}
+
+export function tournamentChannel(tournamentId: string) {
+  return `tournament:${tournamentId}`
+}
+
 export async function publishUserEvent(
   redis: Redis,
   userId: string,
@@ -44,6 +52,44 @@ export async function publishMatchEvent(
     payload: event.payload ?? {},
   }
   await redis.publish(matchChannel(matchId), JSON.stringify(envelope))
+}
+
+export async function publishRoomEvent(
+  redis: Redis,
+  roomId: string,
+  event: {
+    type: string
+    payload?: Record<string, unknown>
+    actorUserId?: string
+  },
+) {
+  const envelope = {
+    type: event.type,
+    id: crypto.randomUUID(),
+    ts: new Date().toISOString(),
+    roomId,
+    payload: event.payload ?? {},
+  }
+  await redis.publish(roomChannel(roomId), JSON.stringify(envelope))
+}
+
+export async function publishTournamentEvent(
+  redis: Redis,
+  tournamentId: string,
+  event: {
+    type: string
+    payload?: Record<string, unknown>
+    actorUserId?: string
+  },
+) {
+  const envelope = {
+    type: event.type,
+    id: crypto.randomUUID(),
+    ts: new Date().toISOString(),
+    tournamentId,
+    payload: event.payload ?? {},
+  }
+  await redis.publish(tournamentChannel(tournamentId), JSON.stringify(envelope))
 }
 
 export async function setPresence(redis: Redis, userId: string, matchId?: string) {

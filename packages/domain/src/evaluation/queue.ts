@@ -18,10 +18,9 @@ import { Queue } from 'bullmq'
  *
  * The queue in this module is a pure producer. It carries only submission IDs;
  * source code is never duplicated into Redis. The worker process owns
- * `evaluateSubmission` and must run each test case inside a sandbox. The current
- * reference implementation in `evaluation/runner.ts` does not execute submitted
- * code at all — it exists so the full lifecycle can be exercised end-to-end
- * until the sandbox runtime is deployed.
+ * `evaluateSubmission` and runs each test case inside a sandboxed child process
+ * (see `execution/sandbox.ts`). For production, the sandbox should be swapped
+ * for Docker/Firecracker without changing domain logic.
  * ============================================================================
  */
 

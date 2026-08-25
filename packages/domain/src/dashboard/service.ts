@@ -33,8 +33,9 @@ export async function getPlayerCard(db: Database, userId: string): Promise<Playe
       losses: acc.losses + r.losses,
       draws: acc.draws + r.draws,
       gamesPlayed: acc.gamesPlayed + r.gamesPlayed,
+      bestWinStreak: Math.max(acc.bestWinStreak, r.bestWinStreak),
     }),
-    { wins: 0, losses: 0, draws: 0, gamesPlayed: 0 },
+    { wins: 0, losses: 0, draws: 0, gamesPlayed: 0, bestWinStreak: 0 },
   )
 
   const best = ratings.reduce<typeof ratings[number] | null>(
@@ -87,6 +88,8 @@ export async function getPlayerCard(db: Database, userId: string): Promise<Playe
     gamesPlayed: games,
     peakRating,
     winRate: decided > 0 ? totals.wins / decided : 0,
+    currentWinStreak: best?.currentWinStreak ?? 0,
+    bestWinStreak: totals.bestWinStreak,
   }
 }
 

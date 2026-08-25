@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api, ApiError, type StackDto } from '@/lib/api'
+import { PLACEMENT_MATCHES } from '@clutch/shared'
 import AppNav from '@/components/clutch/app-nav'
 import ClutchLogo from '@/components/brand/clutch-logo'
 import LeaderboardRow from '@/components/clutch/leaderboard-row'
@@ -73,7 +74,7 @@ export default function LeaderboardPage() {
           <Loading label="Loading ladder" />
         ) : entries.length === 0 ? (
           <Panel className="label-mono text-xs text-muted-foreground">
-            No ranked players yet for this stack. Play 5 matches to appear on the ladder.
+            No ranked players yet for this stack. Play {PLACEMENT_MATCHES} matches to appear on the ladder.
           </Panel>
         ) : (
           <Panel className="p-0">

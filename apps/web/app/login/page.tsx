@@ -42,6 +42,10 @@ export default function LoginPage() {
 
   function routeAuthenticated(u: SessionUser) {
     // Server state decides: never-onboarded players go through onboarding once.
+    if (!u.emailVerifiedAt) {
+      router.replace('/verify')
+      return
+    }
     router.replace(isOnboarded(u) ? '/home' : '/onboarding')
   }
 

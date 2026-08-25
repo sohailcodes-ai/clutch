@@ -80,6 +80,11 @@ export const tournamentRoundStatusEnum = pgEnum('tournament_round_status', [
   'running',
   'completed',
 ])
+export const bracketNodeStatusEnum = pgEnum('bracket_node_status', [
+  'pending',
+  'active',
+  'completed',
+])
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -173,6 +178,8 @@ export const userStackRatings = pgTable(
     draws: integer('draws').notNull().default(0),
     placementRemaining: integer('placement_remaining').notNull().default(5),
     peakRating: integer('peak_rating').notNull().default(1000),
+    currentWinStreak: integer('current_win_streak').notNull().default(0),
+    bestWinStreak: integer('best_win_streak').notNull().default(0),
     lastPlayedAt: timestamp('last_played_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -630,6 +637,7 @@ export const rooms = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     publicId: text('public_id').notNull().unique(),
     name: text('name').notNull(),
+    description: text('description'),
     hostUserId: uuid('host_user_id')
       .notNull()
       .references(() => users.id),
@@ -645,6 +653,10 @@ export const rooms = pgTable(
     /** Server-generated access code for private rooms. Never listed. */
     joinCode: text('join_code'),
     status: roomStatusEnum('status').notNull().default('open'),
+    lockedAt: timestamp('locked_at', { withTimezone: true }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -666,6 +678,8 @@ export const roomParticipants = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id),
+    role: text('role').notNull().default('player'),
+    status: text('status').notNull().default('active'),
     joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
     readyAt: timestamp('ready_at', { withTimezone: true }),
   },
@@ -754,6 +768,7 @@ export const tournaments = pgTable('tournaments', {
     .notNull()
     .references(() => stacks.id),
   maxParticipants: integer('max_participants').notNull(),
+  timeLimitSec: integer('time_limit_sec').notNull().default(900),
   registrationOpensAt: timestamp('registration_opens_at', { withTimezone: true }).notNull(),
   registrationClosesAt: timestamp('registration_closes_at', { withTimezone: true }).notNull(),
   startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
@@ -798,3 +813,49 @@ export const tournamentRounds = pgTable(
   },
   (table) => [unique().on(table.tournamentId, table.roundNumber)],
 )
+
+export const tournamentBracketNodes = pgTable(
+  'tournament_bracket_nodes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tournamentId: uuid('tournament_id')
+      .notNull()
+      .references(() => tournaments.id, { onDelete: 'cascade' }),
+    roundId: uuid('round_id')
+      .notNull()
+      .references(() => tournamentRounds.id, { onDelete: 'cascade' }),
+    roundNumber: integer('round_number').notNull(),
+    position: integer('position').notNull(),
+    participantAUserId: uuid('participant_a_user_id').references(() => users.id),
+    participantBUserId: uuid('participant_b_user_id').references(() => users.id),
+    matchId: uuid('match_id').references((): AnyPgColumn => matches.id, { onDelete: 'set null' }),
+    winnerUserId: uuid('winner_user_id').references(() => users.id),
+    isBye: boolean('is_bye').notNull().default(false),
+    status: bracketNodeStatusEnum('status').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique().on(table.tournamentId, table.roundNumber, table.position),
+    index('idx_bracket_tournament').on(table.tournamentId),
+    index('idx_bracket_round').on(table.roundId),
+  ],
+)
+
+// ---------------------------------------------------------------------------
+// EMAIL VERIFICATION
+// ---------------------------------------------------------------------------
+
+export const verificationTokens = pgTable('verification_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  otpHash: text('otp_hash').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(5),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_verification_tokens_user').on(table.userId),
+])

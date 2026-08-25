@@ -14,19 +14,25 @@ import { writeAuditLog } from '../audit.js'
  * `evaluateAndAwardTitles`, which derives facts exclusively from PostgreSQL.
  *
  * Supported criteria shapes:
- *   { "type": "wins",           "value": 10 }
- *   { "type": "matches",        "value": 25 }
- *   { "type": "draws",          "value": 5 }
- *   { "type": "rating",         "value": 2400, "stackId": "optional" }
- *   { "type": "win_streak",     "value": 5 }
- *   { "type": "unique_solved",  "value": 50 }
- *   { "type": "stacks_won",     "value": 3 }
- *   { "type": "difficulty_climb", "value": 3 }
- *   { "type": "top_rank",       "value": 100 }
- *   { "type": "fast_win",       "value": 60000 }   // ms
- *   { "type": "comeback" }                          // won from behind
- *   { "type": "first_blood_fast", "value": 60000 }  // ms
+ *   { "type": "wins",              "value": 10 }
+ *   { "type": "matches",           "value": 25 }
+ *   { "type": "draws",             "value": 5 }
+ *   { "type": "rating",            "value": 2400, "stackId": "optional" }
+ *   { "type": "win_streak",        "value": 5 }
+ *   { "type": "unique_solved",     "value": 50 }
+ *   { "type": "stacks_won",        "value": 3 }
+ *   { "type": "difficulty_climb",  "value": 3 }
+ *   { "type": "top_rank",          "value": 100 }
+ *   { "type": "fast_win",          "value": 60000 }   // ms
+ *   { "type": "comeback" }                             // won from behind
+ *   { "type": "first_blood_fast",  "value": 60000 }   // ms
  *   { "type": "first_blood" }
+ *   { "type": "underdog_wins",     "value": 5 }       // vs 200+ higher rated
+ *   { "type": "clean_sweeps",      "value": 10 }      // all tests passed on final
+ *   { "type": "perfect_execution", "value": 20 }      // accepted first try across matches
+ *   { "type": "high_volume_wins",  "value": 100 }
+ *   { "type": "comeback_streak",   "value": 3 }       // consecutive comeback wins
+ *   { "type": "no_submit_wins",    "value": 5 }       // opponent never submitted
  */
 
 export type TitleCriteria =
@@ -43,6 +49,12 @@ export type TitleCriteria =
   | { type: 'first_blood' }
   | { type: 'comeback' }
   | { type: 'first_blood_fast'; value: number }
+  | { type: 'underdog_wins'; value: number }
+  | { type: 'clean_sweeps'; value: number }
+  | { type: 'perfect_execution'; value: number }
+  | { type: 'high_volume_wins'; value: number }
+  | { type: 'comeback_streak'; value: number }
+  | { type: 'no_submit_wins'; value: number }
 
 export function isTitleCriteria(value: unknown): value is TitleCriteria {
   if (typeof value !== 'object' || value === null) return false
@@ -59,6 +71,12 @@ export function isTitleCriteria(value: unknown): value is TitleCriteria {
     case 'top_rank':
     case 'fast_win':
     case 'first_blood_fast':
+    case 'underdog_wins':
+    case 'clean_sweeps':
+    case 'perfect_execution':
+    case 'high_volume_wins':
+    case 'comeback_streak':
+    case 'no_submit_wins':
       return typeof c.value === 'number' && c.value >= 0
     case 'first_blood':
     case 'comeback':
@@ -75,6 +93,7 @@ export type CompetitiveFacts = {
   draws: number
   matches: number
   peakRating: number
+  peakRatingByStack: Record<string, number>
   firstBloods: number
   /** Current consecutive-win run across ranked matches (most recent first). */
   currentWinStreak: number
@@ -92,6 +111,18 @@ export type CompetitiveFacts = {
   fastestWinMs: number | null
   /** Wins after having failed an earlier submission in the same match. */
   comebackWins: number
+  /** Wins against opponents rated 200+ points higher. */
+  underdogWins: number
+  /** Matches where every test passed on the final submission (clean win). */
+  cleanSweeps: number
+  /** Matches where first submission was accepted (perfect first try). */
+  perfectExecutions: number
+  /** Consecutive comeback wins (most recent). */
+  currentComebackStreak: number
+  /** Best comeback streak ever. */
+  bestComebackStreak: number
+  /** Wins where opponent never submitted. */
+  noSubmitWins: number
 }
 
 export const EMPTY_FACTS: CompetitiveFacts = {
@@ -100,6 +131,7 @@ export const EMPTY_FACTS: CompetitiveFacts = {
   draws: 0,
   matches: 0,
   peakRating: 0,
+  peakRatingByStack: {},
   firstBloods: 0,
   currentWinStreak: 0,
   bestWinStreak: 0,
@@ -109,6 +141,12 @@ export const EMPTY_FACTS: CompetitiveFacts = {
   globalRank: null,
   fastestWinMs: null,
   comebackWins: 0,
+  underdogWins: 0,
+  cleanSweeps: 0,
+  perfectExecutions: 0,
+  currentComebackStreak: 0,
+  bestComebackStreak: 0,
+  noSubmitWins: 0,
 }
 
 /** Pure criteria evaluation — unit-testable, deterministic. */
@@ -120,8 +158,12 @@ export function evaluateCriteria(criteria: TitleCriteria, facts: CompetitiveFact
       return facts.matches >= criteria.value
     case 'draws':
       return facts.draws >= criteria.value
-    case 'rating':
-      return facts.peakRating >= criteria.value
+    case 'rating': {
+      const peak = criteria.stackId
+        ? (facts.peakRatingByStack[criteria.stackId] ?? 0)
+        : facts.peakRating
+      return peak >= criteria.value
+    }
     case 'win_streak':
       return facts.bestWinStreak >= criteria.value
     case 'unique_solved':
@@ -144,6 +186,18 @@ export function evaluateCriteria(criteria: TitleCriteria, facts: CompetitiveFact
         facts.fastestWinMs !== null &&
         facts.fastestWinMs <= criteria.value
       )
+    case 'underdog_wins':
+      return facts.underdogWins >= criteria.value
+    case 'clean_sweeps':
+      return facts.cleanSweeps >= criteria.value
+    case 'perfect_execution':
+      return facts.perfectExecutions >= criteria.value
+    case 'high_volume_wins':
+      return facts.wins >= criteria.value
+    case 'comeback_streak':
+      return facts.bestComebackStreak >= criteria.value
+    case 'no_submit_wins':
+      return facts.noSubmitWins >= criteria.value
   }
 }
 
@@ -164,8 +218,12 @@ export function titleProgress(
       return pick(facts.matches, criteria.value)
     case 'draws':
       return pick(facts.draws, criteria.value)
-    case 'rating':
-      return pick(facts.peakRating, criteria.value)
+    case 'rating': {
+      const peak = criteria.stackId
+        ? (facts.peakRatingByStack[criteria.stackId] ?? 0)
+        : facts.peakRating
+      return pick(peak, criteria.value)
+    }
     case 'win_streak':
       return pick(facts.bestWinStreak, criteria.value)
     case 'unique_solved':
@@ -178,6 +236,18 @@ export function titleProgress(
       return facts.globalRank !== null ? pick(facts.globalRank, criteria.value) : null
     case 'fast_win':
       return facts.fastestWinMs !== null ? pick(facts.fastestWinMs, criteria.value) : null
+    case 'underdog_wins':
+      return pick(facts.underdogWins, criteria.value)
+    case 'clean_sweeps':
+      return pick(facts.cleanSweeps, criteria.value)
+    case 'perfect_execution':
+      return pick(facts.perfectExecutions, criteria.value)
+    case 'high_volume_wins':
+      return pick(facts.wins, criteria.value)
+    case 'comeback_streak':
+      return pick(facts.bestComebackStreak, criteria.value)
+    case 'no_submit_wins':
+      return pick(facts.noSubmitWins, criteria.value)
     default:
       return null
   }
@@ -223,6 +293,12 @@ export async function getCompetitiveFacts(
   let firstBloods = 0
   let comebackWins = 0
   let fastestWinMs: number | null = null
+  let underdogWins = 0
+  let cleanSweeps = 0
+  let perfectExecutions = 0
+  let noSubmitWins = 0
+  let currentComebackStreak = 0
+  let bestComebackStreak = 0
 
   // Chronological walk over finished RATED matches for streak computation.
   // Unranked room matches never contribute to competitive achievements.
@@ -258,6 +334,23 @@ export async function getCompetitiveFacts(
               : Math.min(fastestWinMs, myBest.executionTimeMs)
         }
 
+        // Clean sweep: every test passed on the final submission
+        const tests = await db.query.testCases.findMany({
+          where: eq(schema.testCases.questionVersionId, m.questionVersionId),
+        })
+        const totalWeight = tests.reduce((sum, t) => sum + t.weight, 0)
+        if (myBest.passedCount >= totalWeight) cleanSweeps += 1
+
+        // Perfect execution: first submission in the match was accepted
+        const earlierSubmission = await db.query.submissions.findFirst({
+          where: and(
+            eq(schema.submissions.matchId, m.id),
+            eq(schema.submissions.userId, userId),
+            ne(schema.submissions.id, myBest.id),
+          ),
+        })
+        if (!earlierSubmission) perfectExecutions += 1
+
         // Comeback: the winner had an earlier non-accepted attempt in the
         // match before landing the accepted one.
         const earlierFailed = await db.query.submissions.findFirst({
@@ -268,7 +361,27 @@ export async function getCompetitiveFacts(
             ne(schema.submissions.status, 'accepted'),
           ),
         })
-        if (earlierFailed) comebackWins += 1
+        if (earlierFailed) {
+          comebackWins += 1
+          currentComebackStreak += 1
+          bestComebackStreak = Math.max(bestComebackStreak, currentComebackStreak)
+        } else {
+          currentComebackStreak = 0
+        }
+
+        // Underdog win: opponent was rated 200+ higher
+        const opponentParticipant = await db.query.matchParticipants.findFirst({
+          where: and(
+            eq(schema.matchParticipants.matchId, m.id),
+            ne(schema.matchParticipants.userId, userId),
+          ),
+        })
+        if (opponentParticipant && p.ratingBefore !== null) {
+          const ratingDiff = p.ratingBefore - (opponentParticipant.ratingBefore ?? 0)
+          if (ratingDiff <= -200) underdogWins += 1
+        }
+      } else {
+        currentComebackStreak = 0
       }
 
       if (m.resolveReason === 'judged') {
@@ -281,23 +394,28 @@ export async function getCompetitiveFacts(
           ),
         })
         let opponentScored = false
+        let opponentSubmitted = false
         if (opponent) {
-          const best = await db.query.submissions.findFirst({
+          const opponentSubs = await db.query.submissions.findMany({
             where: and(
               eq(schema.submissions.matchId, m.id),
               eq(schema.submissions.userId, opponent.userId),
             ),
-            orderBy: desc(schema.submissions.passedCount),
           })
+          opponentSubmitted = opponentSubs.length > 0
+          const best = opponentSubs.sort((a, b) => (b.passedCount ?? 0) - (a.passedCount ?? 0))[0]
           opponentScored = (best?.passedCount ?? 0) > 0
         }
         if (!opponentScored) firstBloods += 1
+        if (!opponentSubmitted) noSubmitWins += 1
       }
     } else if (m.winnerUserId && m.winnerUserId !== userId) {
       losses += 1
       runningStreak = 0
+      currentComebackStreak = 0
     } else {
       draws += 1
+      currentComebackStreak = 0
     }
   }
 
@@ -310,6 +428,10 @@ export async function getCompetitiveFacts(
     .where(and(eq(schema.userQuestionStats.userId, userId), gt(schema.userQuestionStats.solved, 0)))
 
   const peakRating = ratings.reduce((max, r) => Math.max(max, r.peakRating), 0)
+  const peakRatingByStack: Record<string, number> = {}
+  for (const r of ratings) {
+    peakRatingByStack[r.stackId] = Math.max(peakRatingByStack[r.stackId] ?? 0, r.peakRating)
+  }
   const stacksWon = ratings.filter((r) => r.wins > 0).length
   const globalRank = await getGlobalRank(db, userId)
 
@@ -319,6 +441,7 @@ export async function getCompetitiveFacts(
     draws,
     matches: matchesPlayed,
     peakRating,
+    peakRatingByStack,
     firstBloods,
     currentWinStreak: runningStreak,
     bestWinStreak: bestStreak,
@@ -328,6 +451,12 @@ export async function getCompetitiveFacts(
     globalRank,
     fastestWinMs,
     comebackWins,
+    underdogWins,
+    cleanSweeps,
+    perfectExecutions,
+    currentComebackStreak,
+    bestComebackStreak,
+    noSubmitWins,
   }
 }
 

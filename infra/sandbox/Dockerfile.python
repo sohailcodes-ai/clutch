@@ -1,0 +1,10 @@
+FROM python:3.12-alpine
+
+# Create non-root user for execution
+RUN addgroup -S sandbox && adduser -S sandbox -G sandbox
+
+# Workspace directory (will be mounted from host)
+RUN mkdir -p /workspace && chown sandbox:sandbox /workspace
+
+USER sandbox
+WORKDIR /workspace

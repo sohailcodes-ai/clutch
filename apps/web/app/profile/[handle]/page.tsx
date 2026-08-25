@@ -62,6 +62,8 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                     ? player.ratings.reduce((n, r) => n + r.wins, 0) /
                       player.ratings.reduce((n, r) => n + r.wins + r.losses, 0)
                     : 0,
+                currentWinStreak: Math.max(...player.ratings.map((r) => r.currentWinStreak ?? 0), 0),
+                bestWinStreak: Math.max(...player.ratings.map((r) => r.bestWinStreak ?? 0), 0),
                 competitiveStatus: player.competitiveStatus,
                 placementMatchesRequired: player.placementMatchesRequired,
                 placementMatchesCompleted: player.placementMatchesCompleted,

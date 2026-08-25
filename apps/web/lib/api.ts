@@ -12,11 +12,16 @@ export class ApiError extends Error {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    credentials: 'include',
-    headers: init.body ? { 'content-type': 'application/json' } : undefined,
-    ...init,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      credentials: 'include',
+      headers: init.body ? { 'content-type': 'application/json' } : undefined,
+      ...init,
+    })
+  } catch (err) {
+    throw new ApiError('NETWORK', err instanceof Error ? err.message : 'Network error', 0)
+  }
   const body: unknown = await res.json().catch(() => null)
   if (!res.ok) {
     const err = (body ?? {}) as { error?: string; message?: string }
@@ -50,6 +55,7 @@ export type SessionUser = {
   status: string
   role: string
   createdAt: string
+  emailVerifiedAt: string | null
   profile: {
     handle: string
     displayName: string | null
@@ -88,6 +94,8 @@ export type PlayerCardDto = {
   gamesPlayed: number
   peakRating: number
   winRate: number
+  currentWinStreak: number
+  bestWinStreak: number
 } & CompetitiveIdentityDto
 
 export type RecentMatchDto = {
@@ -114,6 +122,8 @@ export type StackRatingDto = {
   peakRating: number | null
   placementRemaining: number
   placementCompleted: number
+  currentWinStreak: number
+  bestWinStreak: number
 }
 
 export type DashboardDto = {
@@ -121,6 +131,21 @@ export type DashboardDto = {
   recentMatches: RecentMatchDto[]
   ratings: StackRatingDto[]
   serverTimeMs: number
+}
+
+export type RunResultDto = {
+  stdout: string
+  stderr: string
+  exitCode: number
+  timedOut: boolean
+  executionTimeMs: number
+  status: 'accepted' | 'compile_error' | 'runtime_error' | 'time_limit' | 'memory_limit' | 'internal_error'
+}
+
+export type LanguageDto = {
+  id: string
+  name: string
+  compiled: boolean
 }
 
 export type TitleCatalogEntry = {
@@ -163,6 +188,7 @@ export type RoomListItemDto = {
   id: string
   publicId: string
   name: string
+  description: string | null
   stackId: string
   stackName: string
   difficultyId: string | null
@@ -170,12 +196,14 @@ export type RoomListItemDto = {
   ranked: boolean
   playerCount: number
   maxPlayers: number
+  createdAt: string
 }
 
 export type RoomDetailDto = {
   id: string
   publicId: string
   name: string
+  description: string | null
   hostHandle: string | null
   stackId: string
   stackName: string
@@ -187,6 +215,9 @@ export type RoomDetailDto = {
   timeLimitSec: number
   questionSelectionMode: string
   status: string
+  lockedAt: string | null
+  startedAt: string | null
+  finishedAt: string | null
   createdAt: string
   joinCode?: string
   players: {
@@ -194,6 +225,7 @@ export type RoomDetailDto = {
     displayName: string | null
     avatarUrl: string | null
     isHost: boolean
+    role: string
     readyAt: string | null
     joinedAt: string
   }[]
@@ -232,6 +264,32 @@ export type TournamentDto = {
   endsAt: string | null
   championHandle: string | null
   serverTimeMs: number
+}
+
+export type TournamentBracketNodeDto = {
+  id: string
+  roundId: string
+  roundNumber: number
+  position: number
+  participantAUserId: string | null
+  participantAHandle: string | null
+  participantBUserId: string | null
+  participantBHandle: string | null
+  matchId: string | null
+  matchPublicId: string | null
+  winnerUserId: string | null
+  winnerHandle: string | null
+  status: 'pending' | 'active' | 'completed' | 'bye'
+}
+
+export type TournamentBracketDto = {
+  tournament: TournamentDto
+  rounds: {
+    roundId: string
+    roundNumber: number
+    nodes: TournamentBracketNodeDto[]
+  }[]
+  currentRoundNumber: number | null
 }
 
 export type StackDto = { id: string; name: string; symbol: string }

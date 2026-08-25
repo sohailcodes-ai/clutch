@@ -8,6 +8,7 @@ import {
 /** Server-side validation for competitive room configuration. */
 export const createRoomSchema = z.object({
   name: z.string().min(3).max(64).trim(),
+  description: z.string().max(500).optional(),
   stackId: z.string().min(1).max(32),
   difficultyId: z.string().min(2).max(24).nullable().default(null),
   maxPlayers: z
@@ -28,6 +29,28 @@ export const createRoomSchema = z.object({
 })
 
 export type CreateRoomInput = z.infer<typeof createRoomSchema>
+
+export const updateRoomSchema = z.object({
+  name: z.string().min(3).max(64).trim().optional(),
+  description: z.string().max(500).optional(),
+  difficultyId: z.string().min(2).max(24).nullable().optional(),
+  maxPlayers: z
+    .number()
+    .int()
+    .min(ROOM_LIMITS.MIN_PLAYERS)
+    .max(ROOM_LIMITS.MAX_PLAYERS)
+    .optional(),
+  ranked: z.boolean().optional(),
+  timeLimitSec: z
+    .number()
+    .int()
+    .min(ROOM_LIMITS.MIN_TIME_LIMIT_SEC)
+    .max(ROOM_LIMITS.MAX_TIME_LIMIT_SEC)
+    .optional(),
+  questionSelectionMode: z.enum(QUESTION_SELECTION_MODES).optional(),
+})
+
+export type UpdateRoomInput = z.infer<typeof updateRoomSchema>
 
 export const joinRoomSchema = z.object({
   joinCode: z.string().length(ROOM_LIMITS.JOIN_CODE_LENGTH).optional(),

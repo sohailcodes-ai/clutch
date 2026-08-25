@@ -9,10 +9,12 @@ import {
   evaluateAndAwardTitles,
   evaluateSubmission,
   markMatchEvaluating,
+  publishMatchEvent,
   recordSubmissionOutcome,
   resolveMatch,
   shouldEvaluateMatch,
   tryPairQueue,
+  completeRoomIfFinished,
 } from '@clutch/domain'
 
 /**
@@ -79,6 +81,18 @@ async function resolveIfReady(matchId: string) {
           console.error({ err, userId: p.userId }, 'title_award_failed')
         }
       }
+
+      // If this match belongs to a room, check if the room is now complete.
+      const match = await db.query.matches.findFirst({
+        where: eq(schema.matches.id, matchId),
+      })
+      if (match?.roomId) {
+        try {
+          await completeRoomIfFinished(db, redis, match.roomId)
+        } catch (err) {
+          console.error({ err, roomId: match.roomId }, 'room_completion_failed')
+        }
+      }
     }
     return resolved
   }
@@ -132,7 +146,18 @@ const worker = new Worker(
     const { submissionId } = job.data
     console.log({ submissionId, jobId: job.id }, 'evaluation_started')
 
-    const result = await evaluateSubmission(db, submissionId)
+    const result = await evaluateSubmission(db, submissionId, (event) => {
+      // Publish per-submission result over WebSocket for realtime match updates.
+      publishMatchEvent(redis, event.matchId, {
+        type: 'submission.result',
+        payload: {
+          submissionId: event.submissionId,
+          status: event.status,
+          passedCount: event.passedCount,
+          totalCount: event.totalCount,
+        },
+      })
+    })
     if (!result) {
       console.warn({ submissionId }, 'submission_not_found')
       return

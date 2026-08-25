@@ -160,6 +160,10 @@ async function applyJudgedOutcome(
     const losses = ratingRow.losses + (current.result === 'loss' ? 1 : 0)
     const draws = ratingRow.draws + (current.result === 'draw' ? 1 : 0)
 
+    // Update streak: wins increment, losses/draws reset to 0
+    const currentWinStreak = current.result === 'win' ? ratingRow.currentWinStreak + 1 : 0
+    const bestWinStreak = Math.max(ratingRow.bestWinStreak, currentWinStreak)
+
     await tx
       .update(schema.userStackRatings)
       .set({
@@ -171,6 +175,8 @@ async function applyJudgedOutcome(
         draws,
         placementRemaining: Math.max(0, ratingRow.placementRemaining - 1),
         peakRating: Math.max(ratingRow.peakRating, calc.after),
+        currentWinStreak,
+        bestWinStreak,
         lastPlayedAt: new Date(),
         updatedAt: new Date(),
       })
