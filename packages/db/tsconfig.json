@@ -6,5 +6,6 @@
     "composite": true
   },
   "include": ["src/**/*"],
+  "exclude": ["src/seed.ts", "src/migrate.ts"],
   "references": [{ "path": "../shared" }]
 }
