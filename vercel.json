@@ -1,0 +1,4 @@
+{
+  "buildCommand": "pnpm turbo build --filter=@clutch/web...",
+  "installCommand": "pnpm install"
+}
