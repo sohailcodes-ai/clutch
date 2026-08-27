@@ -1,35 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"],
-      "env": [
-        "DATABASE_URL",
-        "REDIS_URL",
-        "SESSION_SECRET",
-        "API_PORT",
-        "API_HOST",
-        "CORS_ORIGIN",
-        "NODE_ENV",
-        "EVALUATION_CONCURRENCY",
-        "SANDBOX_MODE",
-        "CLUTCH_ADMIN_HANDLE",
-        "CLUTCH_ADMIN_PASSWORD",
-        "EMAIL_MODE",
-        "SMTP_HOST",
-        "SMTP_PORT",
-        "SMTP_USER",
-        "SMTP_PASS",
-        "EMAIL_FROM"
-      ]
-    },
     "dev": {
       "cache": false,
       "persistent": true
-    },
-    "lint": {
-      "dependsOn": ["^build"]
     }
   }
 }

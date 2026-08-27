@@ -7,7 +7,7 @@
                     "dev:web":  "turbo dev --filter=@clutch/web",
                     "dev:api":  "turbo dev --filter=@clutch/api",
                     "dev:worker":  "turbo dev --filter=@clutch/worker",
-                    "build":  "turbo build",
+                    "build":  "pnpm --filter @clutch/shared build && pnpm --filter @clutch/web build",
                     "db:generate":  "pnpm --filter @clutch/db generate",
                     "db:migrate":  "pnpm --filter @clutch/db migrate",
                     "db:seed":  "pnpm --filter @clutch/db seed",
