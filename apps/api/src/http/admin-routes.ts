@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { eq } from 'drizzle-orm'
+import { eq } from '@clutch/db'
 import { z } from 'zod'
 import {
   AppError,

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray } from '@clutch/db'
 import { z } from 'zod'
 import type { Redis } from 'ioredis'
 import {
