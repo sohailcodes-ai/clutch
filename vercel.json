@@ -1,17 +1,5 @@
 {
   "buildCommand": "pnpm --filter @clutch/shared build && pnpm --filter @clutch/db build && pnpm --filter @clutch/domain build && pnpm --filter @clutch/api build",
   "installCommand": "pnpm install",
-  "outputDirectory": "apps/api/dist",
-  "builds": [
-    {
-      "src": "apps/api/dist/server.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "apps/api/dist/server.js"
-    }
-  ]
+  "outputDirectory": "dist"
 }
