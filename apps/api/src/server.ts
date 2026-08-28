@@ -25,16 +25,23 @@ if (!redisUrl) throw new Error('REDIS_URL is required')
 const db = createDb(databaseUrl)
 
 const parsedRedisUrl = new URL(redisUrl)
+const redisHost = parsedRedisUrl.hostname
+const redisPort = Number(parsedRedisUrl.port || 6379)
+const redisPass = decodeURIComponent(parsedRedisUrl.password)
+const useTls = parsedRedisUrl.protocol === 'rediss:'
+
+console.log(`[redis] host=${redisHost} port=${redisPort} tls=${useTls} pass_len=${redisPass.length}`)
+
 const redisOptions = {
-  host: parsedRedisUrl.hostname,
-  port: Number(parsedRedisUrl.port || 6379),
-  password: decodeURIComponent(parsedRedisUrl.password),
+  host: redisHost,
+  port: redisPort,
+  password: redisPass,
   retryStrategy: (times: number) => Math.min(times * 200, 5000),
   maxRetriesPerRequest: 20,
   connectTimeout: 5000,
   enableReadyCheck: true,
   lazyConnect: true,
-  tls: parsedRedisUrl.protocol === 'rediss:' ? {} : undefined,
+  tls: useTls ? {} : undefined,
 }
 const redis = new Redis(redisOptions)
 const pub = new Redis(redisOptions)
@@ -89,6 +96,7 @@ app.get('/ready', async (request, reply) => {
   } catch (e: any) {
     checks.redis = false
     errors.redis = e?.message ?? String(e)
+    errors.redisStatus = redis.status
   }
   try {
     const counts = await withTimeout(evalQueue.getJobCounts(), 5000)
@@ -100,7 +108,7 @@ app.get('/ready', async (request, reply) => {
 
   const ok = Object.values(checks).every(Boolean)
   void reply.code(ok ? 200 : 503)
-  return { ok, checks, errors: Object.keys(errors).length ? errors : undefined }
+  return { ok, checks, errors: Object.keys(errors).length ? errors : undefined, debug: { redisHost, redisPort, useTls, passLen: redisPass.length } }
 })
 
 await app.ready()
