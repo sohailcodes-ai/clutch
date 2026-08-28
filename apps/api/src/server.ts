@@ -24,23 +24,20 @@ if (!redisUrl) throw new Error('REDIS_URL is required')
 
 const db = createDb(databaseUrl)
 
-const redisTls = redisUrl.startsWith('rediss://') ? {} : undefined
-const redis = new Redis(redisUrl, {
-  retryStrategy: (times) => Math.min(times * 200, 5000),
+const parsedRedisUrl = new URL(redisUrl)
+const redisOptions = {
+  host: parsedRedisUrl.hostname,
+  port: Number(parsedRedisUrl.port || 6379),
+  password: decodeURIComponent(parsedRedisUrl.password),
+  retryStrategy: (times: number) => Math.min(times * 200, 5000),
   maxRetriesPerRequest: 20,
   connectTimeout: 5000,
   enableReadyCheck: true,
   lazyConnect: true,
-  tls: redisTls,
-})
-const pub = new Redis(redisUrl, {
-  retryStrategy: (times) => Math.min(times * 200, 5000),
-  maxRetriesPerRequest: 20,
-  connectTimeout: 5000,
-  enableReadyCheck: true,
-  lazyConnect: true,
-  tls: redisTls,
-})
+  tls: parsedRedisUrl.protocol === 'rediss:' ? {} : undefined,
+}
+const redis = new Redis(redisOptions)
+const pub = new Redis(redisOptions)
 
 const evalQueue = createEvaluationQueue(redisUrl)
 
