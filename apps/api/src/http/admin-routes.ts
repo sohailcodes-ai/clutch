@@ -13,6 +13,7 @@ import {
   createTournamentSchema,
   hasPermission,
   type AdminPermission,
+  type CreateQuestionInput,
 } from '@clutch/shared'
 import { schema } from '@clutch/db'
 import {
@@ -45,6 +46,7 @@ import {
   listAbuseFlags,
   reviewAbuseFlag,
   isTitleCriteria,
+  type AdjudicationInput,
 } from '@clutch/domain'
 import { requireAuth, requirePermission } from '../middleware/auth.js'
 
@@ -156,9 +158,10 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       )
       const match = await adjudicateMatch(app.db, app.redis, {
         matchId,
-        ...input,
+        winnerUserId: input.winnerUserId,
+        reason: input.reason,
         adminUserId: request.user!.id,
-      })
+      } satisfies AdjudicationInput & { adminUserId: string })
       await auditAction(app, request.user!.id, 'admin.match.adjudicated_api', 'match', match.publicId)
       return {
         match: {
@@ -178,7 +181,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   // -------------------------------------------------------------------------
   app.post('/admin/questions', { preHandler: adminOf('admin.questions.create') }, async (request, reply) => {
     const { publish: publishNow, ...input } = parse(createQuestionAdminSchema, request.body)
-    const result = publishNow ? await createQuestion(app.db, input) : await createQuestionDraft(app.db, input)
+    const questionInput = input as CreateQuestionInput
+    const result = publishNow ? await createQuestion(app.db, questionInput) : await createQuestionDraft(app.db, questionInput)
 
     await auditAction(app, request.user!.id, 'admin.question.created', 'question', result.question.id, {
       slug: result.question.slug,
@@ -314,7 +318,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       }),
       request.query,
     )
-    return { entries: await listAuditLog(app.db, query) }
+    return { entries: await listAuditLog(app.db, { action: query.action, adminUserId: query.adminUserId, limit: query.limit, offset: query.offset }) }
   })
 
   // -------------------------------------------------------------------------
@@ -375,7 +379,16 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
     const [created] = await app.db
       .insert(schema.titles)
-      .values({ ...definition, criteria })
+      .values({
+        name: definition.name,
+        code: definition.code,
+        description: definition.description,
+        kind: definition.kind,
+        rarity: definition.rarity,
+        isSecret: definition.isSecret,
+        sortOrder: definition.sortOrder,
+        criteria,
+      })
       .returning()
 
     await auditAction(app, request.user!.id, 'admin.title.created', 'title', definition.code)
