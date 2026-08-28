@@ -245,9 +245,7 @@ export async function registerDiscoveryRoutes(app: FastifyInstance) {
 
   app.get('/tournaments/:slug/bracket', async (request) => {
     const { slug } = parse(z.object({ slug: z.string().min(3).max(64) }), request.params)
-    const tournament = await app.db.query.tournaments.findFirst({
-      where: (t, { eq }) => eq(t.slug, slug),
-    })
+    const tournament = await getTournament(app.db, slug)
     if (!tournament) throw new AppError(ErrorCodes.NOT_FOUND, 'Tournament not found', 404)
     const bracket = await getTournamentBracket(app.db, tournament.id)
     return { bracket }
