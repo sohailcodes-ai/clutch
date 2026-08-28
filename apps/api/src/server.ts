@@ -26,10 +26,16 @@ const db = createDb(databaseUrl)
 const redis = new Redis(redisUrl, {
   retryStrategy: (times) => Math.min(times * 200, 5000),
   maxRetriesPerRequest: 20,
+  connectTimeout: 5000,
+  enableReadyCheck: true,
+  lazyConnect: true,
 })
 const pub = new Redis(redisUrl, {
   retryStrategy: (times) => Math.min(times * 200, 5000),
   maxRetriesPerRequest: 20,
+  connectTimeout: 5000,
+  enableReadyCheck: true,
+  lazyConnect: true,
 })
 
 const evalQueue = createEvaluationQueue(redisUrl)
@@ -62,21 +68,26 @@ await registerWsRoutes(app)
 
 app.get('/health', async () => ({ ok: true }))
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))])
+}
+
 app.get('/ready', async (request, reply) => {
   const checks: Record<string, boolean> = { api: true }
   try {
-    await db.execute(sql`select 1`)
+    await withTimeout(db.execute(sql`select 1`), 5000)
     checks.database = true
   } catch {
     checks.database = false
   }
   try {
-    checks.redis = (await redis.ping()) === 'PONG'
+    if (redis.status !== 'ready') await withTimeout(redis.connect(), 5000)
+    checks.redis = (await withTimeout(redis.ping(), 5000)) === 'PONG'
   } catch {
     checks.redis = false
   }
   try {
-    const counts = await evalQueue.getJobCounts()
+    const counts = await withTimeout(evalQueue.getJobCounts(), 5000)
     checks.evaluationQueue = typeof counts.waiting === 'number'
   } catch {
     checks.evaluationQueue = false

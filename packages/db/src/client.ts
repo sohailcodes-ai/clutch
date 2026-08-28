@@ -10,7 +10,7 @@ let db: ReturnType<typeof drizzle<typeof fullSchema>> | null = null
 
 export function createDb(connectionString: string) {
   if (db) return db
-  client = postgres(connectionString, { max: 10 })
+  client = postgres(connectionString, { max: 10, connect_timeout: 5 })
   db = drizzle(client, { schema: fullSchema })
   return db
 }

@@ -34,7 +34,7 @@ type EvaluationQueueLike = Pick<Queue<EvaluationJobData>, 'add'>
 
 export function createEvaluationQueue(redisUrl: string) {
   return new Queue<EvaluationJobData>(EVALUATION_QUEUE_NAME, {
-    connection: { url: redisUrl },
+    connection: { url: redisUrl, connectTimeout: 5000 },
     // Never let an evaluation job silently vanish; failed jobs are retried a
     // bounded number of times and then kept for inspection.
     defaultJobOptions: {
