@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
@@ -15,8 +16,6 @@ import { registerDiscoveryRoutes } from './http/discovery-routes.js'
 import { registerAdminRoutes } from './http/admin-routes.js'
 import { registerWsRoutes } from './ws/handler.js'
 
-const port = Number(process.env.API_PORT ?? 4000)
-const host = process.env.API_HOST ?? '0.0.0.0'
 const databaseUrl = process.env.DATABASE_URL
 const redisUrl = process.env.REDIS_URL
 
@@ -33,7 +32,6 @@ const pub = new Redis(redisUrl, {
   maxRetriesPerRequest: 20,
 })
 
-// Producer-only connection: the API enqueues evaluation jobs but never runs them.
 const evalQueue = createEvaluationQueue(redisUrl)
 
 const app = Fastify({ logger: true })
@@ -89,12 +87,7 @@ app.get('/ready', async (request, reply) => {
   return { ok, checks }
 })
 
-try {
-  await app.listen({ port, host })
-} catch (err) {
-  app.log.error(err)
-  process.exit(1)
-}
+await app.ready()
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -105,4 +98,22 @@ declare module 'fastify' {
   }
 }
 
-export { EVALUATION_QUEUE_NAME }
+const isVercel = !!process.env.VERCEL
+
+if (!isVercel) {
+  const port = Number(process.env.API_PORT ?? 4000)
+  const host = process.env.API_HOST ?? '0.0.0.0'
+  try {
+    await app.listen({ port, host })
+  } catch (err) {
+    app.log.error(err)
+    process.exit(1)
+  }
+}
+
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  await app.ready()
+  app.server.emit('request', req, res)
+}
+
+export { app, EVALUATION_QUEUE_NAME }
