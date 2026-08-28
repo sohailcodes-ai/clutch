@@ -30,8 +30,6 @@ const redisPort = Number(parsedRedisUrl.port || 6379)
 const redisPass = decodeURIComponent(parsedRedisUrl.password)
 const useTls = parsedRedisUrl.protocol === 'rediss:'
 
-console.log(`[redis] host=${redisHost} port=${redisPort} tls=${useTls} pass_len=${redisPass.length}`)
-
 const redisOptions = {
   host: redisHost,
   port: redisPort,
@@ -82,33 +80,28 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 app.get('/ready', async (request, reply) => {
   const checks: Record<string, boolean> = { api: true }
-  const errors: Record<string, string> = {}
   try {
     await withTimeout(db.execute(sql`select 1`), 5000)
     checks.database = true
-  } catch (e: any) {
+  } catch {
     checks.database = false
-    errors.database = e?.message ?? String(e)
   }
   try {
     if (redis.status !== 'ready') await withTimeout(redis.connect(), 5000)
     checks.redis = (await withTimeout(redis.ping(), 5000)) === 'PONG'
-  } catch (e: any) {
+  } catch {
     checks.redis = false
-    errors.redis = e?.message ?? String(e)
-    errors.redisStatus = redis.status
   }
   try {
     const counts = await withTimeout(evalQueue.getJobCounts(), 5000)
     checks.evaluationQueue = typeof counts.waiting === 'number'
-  } catch (e: any) {
+  } catch {
     checks.evaluationQueue = false
-    errors.evaluationQueue = e?.message ?? String(e)
   }
 
   const ok = Object.values(checks).every(Boolean)
   void reply.code(ok ? 200 : 503)
-  return { ok, checks, errors: Object.keys(errors).length ? errors : undefined, debug: { redisHost, redisPort, useTls, passLen: redisPass.length } }
+  return { ok, checks }
 })
 
 await app.ready()
