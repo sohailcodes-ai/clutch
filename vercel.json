@@ -1,4 +1,4 @@
 {
-  "buildCommand": "pnpm --filter @clutch/shared build && pnpm --filter @clutch/web build",
+  "buildCommand": "pnpm --filter @clutch/shared build && pnpm --filter @clutch/db build && pnpm --filter @clutch/domain build && pnpm --filter @clutch/api build",
   "installCommand": "pnpm install"
 }
