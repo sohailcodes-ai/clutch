@@ -10,87 +10,87 @@
 
 <p align="center">
   A server-authoritative competitive coding platform built around real code execution,
-  live matchmaking, persistent ratings, progression, and observable match state.
+  realtime matchmaking, persistent ratings, progression, and observable competitive state.
 </p>
 
 <p align="center">
-  <code>TypeScript</code> · <code>Next.js 15</code> · <code>Fastify 5</code> ·
-  <code>PostgreSQL</code> · <code>Redis</code> · <code>BullMQ</code> · <code>Docker</code>
+  <code>TypeScript</code> ·
+  <code>Next.js 15</code> ·
+  <code>Fastify 5</code> ·
+  <code>PostgreSQL</code> ·
+  <code>Redis</code> ·
+  <code>BullMQ</code> ·
+  <code>Docker</code>
 </p>
 
 ---
 
-## What is Clutch?
+## Overview
 
-Most coding platforms treat a submission as the end of the experience.
+Clutch is a competitive programming platform designed around one principle:
+
+> Competitive state belongs to the server.
+
+Players can queue, compete, submit code, spectate matches, progress through rankings, unlock titles, and build competitive history.
+
+The browser handles interaction.
+
+The backend determines what actually happened.
+
+A match result, submission result, rating update, title award, or progression event is not accepted because a client says it happened. Competitive state is validated by backend services, persisted in PostgreSQL, processed asynchronously where necessary, and propagated through the realtime layer.
 
 ```text
-write
-  ↓
-submit
-  ↓
-accepted / rejected
+Player Intent
+      ↓
+HTTP / WebSocket
+      ↓
+Server Validation
+      ↓
+Persistent State
+      ↓
+Queue / Worker
+      ↓
+Code Execution
+      ↓
+Evaluation
+      ↓
+Match Resolution
+      ↓
+Rating + Progression
+      ↓
+Realtime State Update
 ```
-
-Clutch treats the submission as part of a larger competitive state machine.
-
-```text
-register
-  ↓
-verify
-  ↓
-onboard
-  ↓
-queue
-  ↓
-match
-  ↓
-ready
-  ↓
-compete
-  ↓
-submit
-  ↓
-execute
-  ↓
-evaluate
-  ↓
-resolve
-  ↓
-rating update
-  ↓
-progression
-  ↓
-play again
-```
-
-The important distinction is that **the browser does not decide what happened**.
-
-A player can request a submission.
-
-They cannot decide whether it passed.
-
-A player can request readiness.
-
-They cannot decide whether the match started.
-
-A player can receive a result.
-
-They cannot manufacture the result.
-
-Competitive state is owned by the backend, persisted in the database, processed asynchronously where necessary, and propagated to clients through the realtime layer.
-
-That's the foundation Clutch is built around.
 
 ---
 
-# Season 01
+# Project at a Glance
 
-Season 01 is focused on one thing:
+| Area                   | Scale |
+| ---------------------- | ----: |
+| Workspace packages     |     6 |
+| TypeScript files       |  222+ |
+| Frontend pages         |    27 |
+| Database tables        |    43 |
+| Database enums         |    19 |
+| Domain service modules |    38 |
+| HTTP routes            |   101 |
+| WebSocket events       |    75 |
+| Supported languages    |     7 |
+| Competitive questions  |   111 |
+| Difficulty bands       |     9 |
+| Competitive titles     |    72 |
+| Unit tests             |   307 |
+| E2E tests              |    63 |
+| Total tests            |   370 |
+| SQL migrations         |    10 |
 
-**making the competitive loop actually work end-to-end.**
+Clutch is structured as a monorepo containing the web application, API, background worker, domain logic, persistence layer, and shared contracts.
 
-The launch experience is centered around:
+---
+
+# Core Competitive Loop
+
+The primary system is built around a complete competitive lifecycle.
 
 ```text
 Register
@@ -107,66 +107,60 @@ Ready
    ↓
 Compete
    ↓
-Submit
+Submit Code
+   ↓
+Execute
    ↓
 Evaluate
    ↓
-Resolve
+Resolve Match
    ↓
 Rating Update
+   ↓
+Titles + Progression
    ↓
 Play Again
 ```
 
-Spectator mode is part of Season 01.
+The client participates in this lifecycle.
 
-Tournament UX is intentionally **not** part of the Season 01 launch loop, even though tournament infrastructure already exists in the platform.
-
-This distinction matters because Clutch is being validated as a competitive system rather than as a collection of disconnected screens.
+It does not authoritatively control it.
 
 ---
 
-# The Core Idea
+# Season 01
 
-Clutch has three boundaries that matter.
+Season 01 focuses on validating the competitive loop end-to-end.
 
-### The client owns interaction.
+The launch experience is centered around:
 
-The web application handles:
+```text
+Queue
+  ↓
+Match
+  ↓
+Ready
+  ↓
+Compete
+  ↓
+Submit
+  ↓
+Evaluate
+  ↓
+Resolve
+  ↓
+Rating
+  ↓
+Progress
+```
 
-* rendering
-* input
-* local UI state
-* optimistic presentation where appropriate
-* WebSocket subscriptions
-* API requests
+Spectator functionality is included in the Season 01 competitive experience.
 
-### The server owns competition.
+Additional systems such as tournaments, rooms, social features, challenges, and events exist within the platform architecture, but are not treated as required dependencies for validating the initial competitive loop.
 
-The backend determines:
+The goal of Season 01 is not to ship the maximum number of screens.
 
-* match state
-* participants
-* readiness
-* submissions
-* evaluation results
-* winners
-* rating changes
-* progression
-* room state
-* seasonal state
-
-### The worker owns expensive asynchronous work.
-
-Background processing handles:
-
-* matchmaking sweeps
-* submission evaluation
-* sandbox execution
-* match resolution
-* season lifecycle processing
-
-The result is a system where the UI is a projection of competitive state rather than the source of it.
+The goal is to verify that the competitive system behaves correctly under the actual application stack.
 
 ---
 
@@ -191,9 +185,8 @@ The result is a system where the UI is a projection of competitive state rather 
                 ┌────────────────┐                  ┌────────────────┐
                 │   PostgreSQL   │                  │     Redis      │
                 │                │                  │                │
-                │ source of      │                  │ queues         │
-                │ persistent     │                  │ pub/sub        │
-                │ competitive    │                  │ transient      │
+                │ persistent     │                  │ queues         │
+                │ competitive    │                  │ pub/sub        │
                 │ state          │                  │ coordination   │
                 └────────────────┘                  └───────┬────────┘
                                                             │
@@ -203,56 +196,95 @@ The result is a system where the UI is a projection of competitive state rather 
                                                      │    Worker    │
                                                      └──────┬───────┘
                                                             │
-                              ┌─────────────────────────────┼────────────────────────┐
-                              │                             │                        │
-                              ▼                             ▼                        ▼
-                       Matchmaking                    Evaluation              Season Lifecycle
-                              │                             │
-                              │                             ▼
-                              │                     ┌───────────────┐
-                              │                     │ Runtime Layer │
-                              │                     └───────┬───────┘
-                              │                             │
-                              │                             ▼
-                              │                     ┌───────────────┐
-                              │                     │ Docker Sandbox│
-                              │                     └───────┬───────┘
-                              │                             │
-                              │                             ▼
-                              │                        Test Cases
-                              │                             │
-                              └─────────────────────────────┤
+                          ┌─────────────────────────────────┼─────────────────────────────────┐
+                          ▼                                 ▼                                 ▼
+                    Matchmaking                       Evaluation                       Season Lifecycle
+                          │                                 │
+                          │                                 ▼
+                          │                         ┌───────────────┐
+                          │                         │ Runtime Layer │
+                          │                         └───────┬───────┘
+                          │                                 │
+                          │                                 ▼
+                          │                         ┌───────────────┐
+                          │                         │ Docker Sandbox│
+                          │                         └───────┬───────┘
+                          │                                 │
+                          └─────────────────────────────────┼─────────────────────────────────┘
                                                             ▼
                                                        Resolution
                                                             │
-                              ┌─────────────────────────────┼───────────────────────┐
-                              ▼                             ▼                       ▼
-                           Rating                        Streaks                 Titles
-                              │                             │                       │
-                              └─────────────────────────────┼───────────────────────┘
+                                  ┌─────────────────────────┼─────────────────────────┐
+                                  ▼                         ▼                         ▼
+                               Rating                   Progression                 Realtime
+                                  │                         │                         │
+                                  └─────────────────────────┼─────────────────────────┘
                                                             ▼
-                                                        Player State
+                                                     Player State
 ```
-
-The architecture is intentionally split by responsibility.
-
-`apps/api` handles network-facing operations.
-
-`apps/worker` handles asynchronous processing.
-
-`packages/domain` contains the competitive rules.
-
-`packages/db` owns persistence.
-
-`packages/shared` contains contracts and shared constants.
-
-The frontend consumes the resulting state.
-
-It does not define it.
 
 ---
 
-# Monorepo
+# System Boundaries
+
+Clutch separates responsibility between the client, API, worker, domain layer, and persistence layer.
+
+## Client
+
+The web application owns:
+
+* rendering
+* input
+* local UI state
+* optimistic presentation where appropriate
+* HTTP requests
+* WebSocket subscriptions
+
+## API
+
+The API owns network-facing operations including:
+
+* authentication
+* validation
+* authorization
+* competitive action requests
+* profile access
+* matchmaking entry
+* submission creation
+* realtime event delivery
+
+## Worker
+
+The worker handles asynchronous and periodic operations including:
+
+* matchmaking sweeps
+* submission evaluation
+* sandbox execution
+* match resolution
+* progression evaluation
+* season lifecycle processing
+
+## Domain
+
+The domain layer contains competitive rules such as:
+
+* matchmaking logic
+* match state transitions
+* rating calculation
+* title evaluation
+* season logic
+* tournament logic
+* social and challenge rules
+
+## Database
+
+PostgreSQL is the persistent source of truth for competitive state.
+
+Redis is used for transient coordination, queues, caching, and realtime infrastructure.
+
+---
+
+# Repository Structure
 
 ```text
 clutch/
@@ -260,14 +292,14 @@ clutch/
 ├── apps/
 │   ├── api/                  # Fastify HTTP + WebSocket server
 │   ├── web/                  # Next.js application
-│   └── worker/               # BullMQ background worker
+│   └── worker/               # BullMQ background processing
 │
 ├── packages/
-│   ├── db/                   # Drizzle schema, migrations, database client
+│   ├── db/                   # Drizzle schema, migrations, seed data
 │   ├── domain/               # Competitive business logic
-│   └── shared/               # Schemas, constants and shared contracts
+│   └── shared/               # Schemas, constants and contracts
 │
-├── e2e/                      # Season 01 end-to-end verification
+├── e2e/                      # End-to-end integration verification
 │
 ├── infra/
 │   └── sandbox/              # Runtime Docker images
@@ -277,43 +309,11 @@ clutch/
 └── README.md
 ```
 
-Clutch uses a pnpm workspace so application boundaries remain explicit while domain code, persistence, and shared contracts can evolve together.
-
 ---
 
-# Matchmaking
+# Competitive Match Lifecycle
 
-Matchmaking is worker-driven rather than implemented as a frontend timer.
-
-The general flow is:
-
-```text
-player joins queue
-       ↓
-persistent queue state
-       ↓
-matchmaking sweep
-       ↓
-eligible players grouped
-       ↓
-match created
-       ↓
-participants notified
-```
-
-The matchmaking worker runs on a short sweep interval and operates against server-owned state.
-
-The client can request entry into the queue.
-
-It cannot create a match by itself.
-
-This matters because matchmaking is one of the first places where a client-authoritative design becomes exploitable.
-
----
-
-# Match Lifecycle
-
-A match is a persisted state machine.
+Matches are persisted state machines.
 
 Conceptually:
 
@@ -331,88 +331,109 @@ evaluating
 resolved
 ```
 
-The match lifecycle has explicit timing constraints.
+Competitive transitions are validated server-side.
+
+Players can request actions.
+
+The system determines whether those actions are valid.
+
+Match operations also use idempotency protection where duplicate requests could otherwise create duplicate competitive side effects.
+
+Examples include:
 
 ```text
-READY_WINDOW_SEC = 30
-MATCH_TIME_LIMIT_SEC = 900
+ready request
+submission request
+evaluation work
+rating updates
+progression awards
 ```
 
-Actions such as readiness and submission use server-side validation and idempotency keys.
+Network retries should not create duplicate ratings, submissions, rewards, or other persistent competitive consequences.
 
-For example, a ready request requires an `idempotencyKey`.
+---
 
-A submission requires:
+# Matchmaking
+
+Matchmaking is worker-driven.
 
 ```text
-sourceCode
-idempotencyKey
-isFinal
+Player joins queue
+        ↓
+Persistent queue state
+        ↓
+Matchmaking sweep
+        ↓
+Eligible players compared
+        ↓
+Match created
+        ↓
+Participants notified
 ```
 
-This allows retries to remain safe without turning network instability into duplicate competitive side effects.
+Rating search ranges expand over time to reduce unnecessary waiting while maintaining competitive proximity.
+
+The browser does not create matches directly.
+
+Match creation is a server-owned state transition.
 
 ---
 
 # Real Code Execution
 
-Clutch does not fake evaluation.
-
-Submitted source code is actually executed.
+Clutch evaluates actual submitted programs.
 
 The current runtime registry supports:
 
-| Language   | Toolchain              |
-| ---------- | ---------------------- |
-| Python     | Python 3.12            |
-| JavaScript | Node.js 20             |
-| TypeScript | Node.js 20             |
-| C++        | g++ 13.2 / C++17       |
-| Java       | Eclipse Temurin JDK 21 |
-| Go         | Go 1.22                |
-| Rust       | rustc 1.77             |
+| Language   | Runtime             |
+| ---------- | ------------------- |
+| Python     | Python 3.12         |
+| JavaScript | Node.js             |
+| TypeScript | Node.js             |
+| C++        | g++ / C++17         |
+| Java       | Eclipse Temurin JDK |
+| Go         | Go                  |
+| Rust       | rustc               |
 
-The frontend does not maintain its own independent language catalog.
-
-It discovers available runtimes through:
+Available runtimes are exposed through the backend rather than duplicated as a frontend-only language list.
 
 ```http
 GET /meta/languages
 ```
 
-That means the languages presented to the user come from the backend runtime registry.
+This keeps the UI aligned with the actual execution environment.
 
 ---
 
 # Execution Pipeline
 
-Execution is separated from competitive logic.
-
 ```text
-source code
+Source Code
     │
     ▼
-runtime registry
+Runtime Registry
     │
     ▼
-sandbox image
+Sandbox
     │
-    ├──────── compile
-    │           │
-    │           ├── failure
-    │           │
-    │           └── executable
+    ├── Compile
     │
-    └──────── execute
-                │
-                ▼
-          SandboxResult
-                │
-                ▼
-            Evaluation
+    ├── Execute
+    │
+    ▼
+Sandbox Result
+    │
+    ▼
+Test Case Evaluation
+    │
+    ▼
+Submission Result
+    │
+    ▼
+Match Resolution
 ```
 
-Compiled languages use their native toolchains.
+Compiled languages use their native compilation toolchains.
 
 ```text
 C++   → g++    → executable → run
@@ -421,11 +442,9 @@ Go    → build  → executable → run
 Rust  → rustc  → executable → run
 ```
 
-The domain layer does not need to know how a language is compiled.
+The competitive domain consumes execution results rather than depending directly on compiler implementation details.
 
-It consumes the execution result.
-
-That separation makes the runtime layer replaceable.
+This keeps the runtime layer replaceable.
 
 ---
 
@@ -433,47 +452,35 @@ That separation makes the runtime layer replaceable.
 
 Production-oriented execution uses Docker isolation.
 
-The sandbox currently applies controls including:
+Current controls include resource and environment restrictions such as:
 
 ```text
 network        disabled
-memory         256 MB
-CPU            1 core
-processes      64
-source size    64 KB
-output size    256 KB
-timeout        10–15 seconds
-filesystem     read-only + writable /tmp
+memory         limited
+CPU            limited
+process count  limited
+source size    limited
+output size    limited
+timeout        enforced
+filesystem     restricted
 user           non-root
 capabilities   dropped
 privileges     no-new-privileges
 ```
 
-Development can use:
+Development can use a lighter local execution mode.
 
-```text
-SANDBOX_MODE=child_process
-```
+Production execution does not rely on that mode.
 
-Production explicitly rejects the child-process execution mode.
+Docker is treated as a practical isolation boundary rather than a claim of perfect hostile-code security.
 
-This is enforced rather than relying on deployment convention.
-
-### Security boundary
-
-Docker is treated as an isolation boundary, not as a claim of perfect hostile-code security.
-
-Container isolation ultimately depends on the host kernel and runtime configuration.
-
-For a higher-assurance deployment, the execution interface can be moved toward stronger isolation such as microVM-based execution without requiring the competitive domain to change.
+Higher-assurance deployments can replace the execution implementation with stronger isolation such as microVM-based runtimes without requiring the competitive domain model to change.
 
 ---
 
 # Evaluation
 
-Evaluation is asynchronous.
-
-The API creates the submission and queues evaluation work:
+Submission evaluation is asynchronous.
 
 ```text
 API
@@ -484,198 +491,195 @@ BullMQ
  ▼
 Worker
  │
- ├── execute
- ├── evaluate test cases
- ├── determine submission result
- └── resolve match
+ ├── Execute Program
+ ├── Run Test Cases
+ ├── Determine Result
+ └── Resolve Match
           │
-          ├── winner
-          ├── rating
-          ├── streak
-          ├── titles
-          └── progression
+          ├── Winner
+          ├── Rating
+          ├── Streak
+          ├── Titles
+          └── Player Progression
 ```
 
-The evaluation queue is:
+Expensive execution work is kept outside the HTTP request lifecycle.
 
-```text
-submission-evaluation
-```
-
-This keeps expensive execution work outside the HTTP request path.
-
-A submission can therefore move through explicit states rather than making the API request itself responsible for the entire execution lifecycle.
+This allows submissions to move through explicit states rather than requiring a single API request to synchronously execute and resolve an entire competitive match.
 
 ---
 
-# Ratings & Placement
+# Ratings and Placement
 
-Clutch uses ELO-based competitive rating.
+Clutch uses ELO-based competitive ratings.
 
-New players enter through placement matches.
+Players enter competitive play through placement matches.
 
 ```text
-placement
+Placement
     ↓
-initial competitive state
+Initial Rating State
     ↓
-ranked matches
+Ranked Matches
     ↓
-rating changes
+Rating Updates
 ```
 
-Placement count is centrally defined through:
-
-```ts
-PLACEMENT_MATCHES
-```
-
-rather than duplicated across unrelated features.
-
-Rating calculation uses K-factor tiers and operates within the relevant competitive stack.
-
-Competitive state can include:
+Competitive rating state includes information such as:
 
 ```text
 rating
 peak rating
 placement state
-current win streak
-best win streak
-season
-final rank
-titles
+current streak
+best streak
+season state
+final season rank
 ```
 
-Stack-scoped state is deliberately kept scoped.
+Ratings are scoped to the relevant competitive stack.
 
-A rating or achievement in one competitive stack must not accidentally satisfy criteria belonging to another.
+Competitive progression should not accidentally treat unrelated stacks as the same rating pool.
 
 ---
 
-# Streaks
+# Question Bank
 
-Streaks are persistent state.
+Clutch currently contains **111 competitive programming questions** distributed across **9 difficulty bands**.
+
+| Difficulty | Focus                                  |
+| ---------- | -------------------------------------- |
+| Rookie     | Fundamental programming                |
+| Starter    | Core problem solving                   |
+| Beginner   | Basic algorithms and data structures   |
+| Easy       | Common competitive patterns            |
+| Medium     | Algorithmic reasoning                  |
+| Hard       | Advanced problem solving               |
+| Advanced   | Complex algorithmic systems            |
+| Elite      | High-difficulty competitive techniques |
+| Clutch     | Expert-level problems                  |
+
+Question coverage includes areas such as:
+
+* Arrays and Lists
+* Strings
+* Hashing
+* Searching
+* Sorting
+* Stacks and Queues
+* Trees
+* Graphs
+* Dynamic Programming
+* Greedy Algorithms
+* Math and Number Theory
+* Bit Manipulation
+* Simulation
+* Recursion
+
+Questions contain structured problem definitions, examples, public test cases, hidden test cases, expected output, and stack compatibility.
+
+Competitive question assignment is server-controlled.
+
+Players do not choose the question assigned to a ranked match.
+
+---
+
+# Titles and Progression
+
+Clutch contains **72 persistent competitive titles**.
+
+Titles are evaluated server-side against accumulated competitive facts derived from real match history and player progression.
+
+The title system covers categories such as:
 
 ```text
-currentWinStreak
-bestWinStreak
+Wins
+Matches Played
+Unique Problems Solved
+Win Streaks
+Rating Milestones
+First Bloods
+Fast Wins
+Clean Sweeps
+Perfect Executions
+Comebacks
+Comeback Streaks
+Underdog Victories
+No-Submit Wins
+Difficulty Progression
+Stacks Won
+Global Rank
 ```
 
-They are stored with the relevant player rating state instead of being reconstructed from the entire match history every time the value is needed.
+Titles range from:
 
-This makes streaks part of the domain model rather than a derived UI decoration.
+```text
+common
+uncommon
+rare
+epic
+legendary
+```
 
----
+Some achievements are intentionally hidden until unlocked.
 
-# Titles
+Title progression is exposed through the API and rendered dynamically by the frontend.
 
-Titles represent recorded achievements.
+Awards are protected against duplicates through database-level uniqueness constraints and idempotent evaluation.
 
-The system currently supports multiple title criteria types covering competitive state such as:
+```text
+Match Resolution
+       ↓
+Competitive Facts
+       ↓
+Criteria Evaluation
+       ↓
+Award Detection
+       ↓
+Persistent Award
+       ↓
+Audit Log
+       ↓
+Player Progression
+```
 
-* rating
-* streaks
-* tournament rewards
-* progression conditions
+Titles represent recorded competitive achievements.
 
-Criteria are evaluated against the correct competitive scope.
-
-A title is therefore evidence of a persisted achievement, not simply a badge that the frontend decides to display.
+They are not frontend-only badges.
 
 ---
 
 # Seasons
 
-Seasons provide a boundary around competitive progression without destroying historical state.
+Seasons provide a boundary around competitive progression while preserving historical results.
 
 At rollover:
 
 ```text
-active season
+Active Season
      ↓
-eligible ranked players
+Ranked Players
      ↓
-rating order
+Rating Order
      ↓
-final rank
+Final Rank
      ↓
-season snapshot
+Season Snapshot
      ↓
-new season
+New Season
 ```
 
-The previous season retains its final result.
+Historical season results remain available.
 
-The new season starts a new competitive progression cycle.
-
-This allows the system to have seasonal competition without treating historical data as disposable.
+New seasons begin new competitive progression cycles without discarding previous competitive state.
 
 ---
 
-# Spectating
+# Realtime State
 
-Spectator mode is part of Season 01.
+Clutch uses WebSockets for live competitive state.
 
-Observers receive server-owned match state through the same realtime infrastructure used by active participants.
-
-The observer model is intentionally read-only.
-
-```text
-participant
-    │
-    ▼
-competitive state
-    │
-    ├──────── player client
-    │
-    └──────── observer client
-```
-
-A spectator can observe the match.
-
-They cannot mutate competitive state.
-
----
-
-# WebSockets
-
-Clutch uses WebSockets for live match state.
-
-The frontend exposes:
-
-```ts
-useWs()
-```
-
-with connection state such as:
-
-```text
-connecting
-connected
-reconnecting
-disconnected
-```
-
-The realtime flow is conceptually:
-
-```text
-player action
-     ↓
-HTTP API
-     ↓
-persistent state
-     ↓
-worker / evaluation
-     ↓
-event publication
-     ↓
-WebSocket
-     ↓
-clients
-```
-
-Relevant events include:
+The realtime system communicates events such as:
 
 ```text
 match.found
@@ -686,74 +690,88 @@ submission.queued
 submission.result
 match.evaluating
 match.resolved
-match.adjudicated
 match.snapshot
 observer.snapshot
 ```
 
-The WebSocket layer is not the source of truth.
+The WebSocket layer is a transport mechanism.
 
-It is a transport mechanism for server-owned state.
+It is not the source of truth.
 
-On reconnect, clients can resynchronize against the authoritative match snapshot instead of assuming their previous browser state is still correct.
+On reconnect, clients can resynchronize against authoritative server state instead of trusting stale browser state.
 
 ---
 
-# Authentication & Verification
+# Spectating
+
+Spectators observe server-owned match state.
+
+```text
+Competitive State
+       │
+       ├── Participant Client
+       │
+       └── Spectator Client
+```
+
+Observers can receive match updates without receiving authority to mutate competitive state.
+
+Spectating is therefore read-only by design.
+
+---
+
+# Competitive Ecosystem
+
+Beyond ranked matchmaking, Clutch includes infrastructure for:
+
+* Player profiles
+* Match history
+* Rating history
+* Friend systems
+* Challenges
+* Custom rooms
+* Events
+* Tournaments
+* Leaderboards
+* Spectating
+* Administrative moderation
+* Audit logging
+
+These systems share the same underlying principles:
+
+```text
+server authority
+persistent state
+explicit validation
+idempotent side effects
+observable transitions
+```
+
+---
+
+# Authentication and Verification
 
 Competitive actions require authenticated sessions.
 
-Sessions use:
+Sessions are represented by random tokens that are stored as hashes rather than persisted as plaintext credentials.
 
-```text
-32-byte random token
-        ↓
-SHA-256 hash
-        ↓
-auth_sessions
-        ↓
-7-day TTL
-        ↓
-clutch_session cookie
-```
-
-Email verification is enforced before entering competitive flows such as queue participation and submissions.
-
-The verification system uses:
+Email verification uses:
 
 ```text
 6-digit OTP
      ↓
-SHA-256 hash
+Hash
      ↓
-verification_tokens
+Verification Token
      ↓
-attempt limits
+Attempt Limits
      ↓
-resend cooldown
+Resend Cooldown
      ↓
-single-use verification
+Single-Use Verification
 ```
 
-Development email delivery can log verification codes locally.
-
-Production can use SMTP through the delivery abstraction.
-
-The verification layer is separate from competitive progression so account security does not become entangled with rating logic.
-
----
-
-# Redis Compatibility
-
-Clutch is tested against the actual infrastructure versions it supports.
-
-One production compatibility issue exposed during development was Redis 3.0's lack of support for multi-field `HSET`.
-
-The matchmaking state path was therefore implemented using `HMSET` for compatibility with Redis 3.0.504.
-
-This is a small detail, but it illustrates an important principle:
-
-**the system is validated against the infrastructure it actually runs on, not an assumed modern dependency stack.**
+Verification is enforced before entering sensitive competitive flows.
 
 ---
 
@@ -761,46 +779,52 @@ This is a small detail, but it illustrates an important principle:
 
 PostgreSQL is the persistent source of truth.
 
-Drizzle ORM provides the database layer.
-
-The database contains persistent competitive state including:
+The database contains competitive state including:
 
 ```text
 users
+profiles
 sessions
 verification tokens
-seasons
 matches
 participants
 submissions
+submission runs
 ratings
 rating ledger
+seasons
+season snapshots
+questions
+test cases
 titles
+user titles
 rooms
+events
 tournaments
+audit logs
+telemetry
 ```
 
-The database client uses a singleton pattern so application subsystems share the intended connection instance rather than accidentally creating competing lifecycle-managed clients.
+Important competitive consequences are persisted rather than reconstructed from frontend presentation state.
 
 ---
 
 # Background Processing
 
-The worker handles periodic and asynchronous jobs.
+The worker handles asynchronous and periodic operations.
 
-Current sweep intervals include:
+This includes:
 
 ```text
-matchmaking       2s
-evaluation       15s
-season lifecycle 60s
+matchmaking
+evaluation
+sandbox execution
+match resolution
+progression evaluation
+season lifecycle
 ```
 
-This keeps periodic work outside the request/response layer.
-
-The worker is also responsible for consequences that should happen exactly once from the perspective of competitive state.
-
-That means retry safety and idempotency are treated as domain requirements rather than infrastructure afterthoughts.
+Moving these responsibilities outside the request/response path keeps expensive work from blocking interactive API operations.
 
 ---
 
@@ -808,238 +832,106 @@ That means retry safety and idempotency are treated as domain requirements rathe
 
 The API exposes request identifiers and metrics.
 
-Every response can be correlated through a request ID, making failures easier to trace across:
+A request can be traced through:
 
 ```text
-browser
-  ↓
+Browser
+   ↓
 API
-  ↓
-database / Redis
-  ↓
-queue
-  ↓
-worker
-  ↓
-evaluation
+   ↓
+Database / Redis
+   ↓
+Queue
+   ↓
+Worker
+   ↓
+Evaluation
 ```
 
-A metrics endpoint is available at:
+Metrics are exposed through:
 
 ```http
 GET /metrics
 ```
 
-The goal is not simply to know that "something failed."
-
-The goal is to be able to identify which subsystem failed and follow the request through the system.
+The objective is to make subsystem failures diagnosable rather than treating the platform as a collection of isolated black boxes.
 
 ---
 
-# E2E Verification
+# Testing and Verification
 
-Unit tests alone are not enough for a system like Clutch.
+Clutch uses both unit and end-to-end verification.
 
-The Season 01 test suite runs an in-process Fastify server against real infrastructure:
+Current repository verification includes:
+
+```text
+307 unit tests
+ 63 E2E tests
+────────────────
+370 total tests
+```
+
+The E2E environment exercises the real application stack rather than replacing critical boundaries with mocks.
+
+The stack includes:
 
 ```text
 Fastify
-   │
-   ├── real PostgreSQL
-   ├── real Redis
-   ├── real domain logic
-   ├── real matchmaking
-   ├── real evaluation
-   └── real sandbox execution
+PostgreSQL
+Redis
+Domain Logic
+Matchmaking
+BullMQ Worker
+Evaluation Pipeline
+Sandbox Execution
 ```
 
-The E2E suite verifies the complete competitive path rather than mocking the critical infrastructure boundaries.
-
-The happy path covers:
+The competitive flow covers paths including:
 
 ```text
-1. registration
-2. duplicate registration rejection
-3. verification
-4. onboarding
-5. profile/stat state
-6. queue entry
-7. matchmaking
-8. match discovery
-9. ready state
-10. competition
-11. submission
-12. evaluation
-13. match resolution
-14. rating update
-15. history
-16. reconnect/state synchronization
-17. play again
+registration
+verification
+onboarding
+queue entry
+matchmaking
+match discovery
+ready state
+competition
+submission
+evaluation
+resolution
+rating update
+history
+reconnection
+state synchronization
 ```
 
-The test suite also dynamically determines the question assigned to the match instead of assuming a particular seeded question.
-
-This matters because the E2E test verifies the system rather than accidentally verifying one hardcoded fixture.
+The purpose of the E2E suite is to verify that the competitive system works as a system, not merely that isolated functions return expected values.
 
 ---
 
-# Verification Status
-
-Current repository verification:
+# Infrastructure
 
 ```text
-272 / 272 unit tests       ✓
-36 / 36 E2E tests          ✓
-308 total tests            ✓
-6 packages building        ✓
-Web compilation            ✓
-Web type checking          ✓
-Season 01 happy path       ✓
+Runtime
+  Node.js
+
+Persistence
+  PostgreSQL
+  Drizzle ORM
+
+Coordination
+  Redis
+  BullMQ
+
+Execution
+  Docker
+
+Build
+  pnpm Workspace
+  Turborepo
+  TypeScript
 ```
-
-The Season 01 E2E suite has passed across consecutive runs.
-
-The critical competitive path has therefore been exercised through the actual application stack rather than only through isolated unit tests.
-
----
-
-# Seeded Competitive Content
-
-The development database currently contains:
-
-```text
-16 seeded questions
-63 test cases
-1 active season
-13 competitive stacks
-```
-
-The seeded question set includes:
-
-```text
-sum-two-numbers
-```
-
-alongside the remaining competitive question fixtures.
-
-Question selection is server-controlled.
-
-The client does not choose which competitive question is assigned to a match.
-
----
-
-# Project Status
-
-Clutch has moved beyond basic feature implementation.
-
-The current priority is **system-level validation and operational hardening**.
-
-Implemented systems include:
-
-```text
-✓ Authentication
-✓ Session management
-✓ Email verification
-✓ Onboarding
-✓ Matchmaking
-✓ Placement matches
-✓ Match lifecycle
-✓ Server-authoritative state
-✓ Multi-language execution
-✓ Docker sandbox
-✓ Asynchronous evaluation
-✓ ELO rating
-✓ Persistent streaks
-✓ Titles
-✓ Rooms
-✓ Tournaments
-✓ Seasons
-✓ WebSocket state
-✓ Spectator infrastructure
-✓ Background workers
-✓ Match history
-✓ Rating history
-✓ Observability
-✓ E2E competitive verification
-```
-
-Season 01 is specifically focused on validating the core competitive loop and spectator experience.
-
----
-
-# Known Engineering Boundaries
-
-Clutch is functional, but there are deliberate areas that remain below high-assurance production infrastructure.
-
-### Sandbox isolation
-
-Docker provides practical isolation and resource controls.
-
-It is not presented as a perfect hostile-code boundary.
-
-Higher-assurance deployments can move execution toward microVMs or stronger kernel-level isolation.
-
-### Runtime performance
-
-Cold compilation remains an optimization target for compiled languages.
-
-Future improvements can include build caching and runtime reuse.
-
-### Editor
-
-The current editor is intentionally lighter than a full IDE environment.
-
-A more advanced editor experience can be added without changing the competitive backend.
-
-### Account recovery
-
-Email verification is implemented.
-
-Password recovery and broader account recovery flows remain separate work.
-
-These are documented boundaries rather than hidden gaps.
-
----
-
-# Engineering Principles
-
-### Server authority
-
-The client requests state transitions.
-
-The server decides whether they happen.
-
-### Real execution
-
-Submitted programs are actually executed.
-
-### Persistent competitive state
-
-Important state is stored rather than repeatedly reconstructed from presentation-layer data.
-
-### Idempotent side effects
-
-Retries must not create duplicate ratings, rewards, submissions, or other competitive consequences.
-
-### Scoped state
-
-Ratings, titles, and progression criteria operate within their intended competitive context.
-
-### Asynchronous by design
-
-Expensive execution and background lifecycle work are handled outside latency-sensitive HTTP paths.
-
-### Explicit trust boundaries
-
-Security assumptions are documented rather than hidden behind vague claims.
-
-### Replaceable infrastructure
-
-The competitive domain should not care whether execution is backed by Docker, a stronger sandbox, or another runtime implementation.
-
-### No fabricated competition
-
-Matches, rankings, titles, rewards, and results represent actual persisted system state.
 
 ---
 
@@ -1067,23 +959,19 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-## Sandbox
-
-Build the runtime images:
+## Build Sandbox Images
 
 ```bash
 pnpm sandbox:build
 ```
 
-## Development
-
-Run the complete application:
+## Run Development Environment
 
 ```bash
 pnpm dev
 ```
 
-Or run individual services:
+Or run services individually:
 
 ```bash
 pnpm dev:web
@@ -1111,7 +999,7 @@ Run unit tests:
 pnpm test
 ```
 
-Run Season 01 E2E tests:
+Run end-to-end tests:
 
 ```bash
 pnpm test:e2e
@@ -1119,63 +1007,155 @@ pnpm test:e2e
 
 ---
 
-# Stack
+# Engineering Principles
+
+## Server Authority
+
+Clients request state transitions.
+
+Backend systems validate and decide them.
+
+## Real Execution
+
+Submitted programs are actually executed against test cases.
+
+## Persistent Competitive State
+
+Matches, ratings, titles, history, and progression represent persisted state.
+
+## Idempotent Side Effects
+
+Retries should not produce duplicate competitive consequences.
+
+## Explicit State Machines
+
+Competitive transitions are modeled rather than inferred from frontend state.
+
+## Scoped Competition
+
+Ratings and progression operate within their intended competitive context.
+
+## Asynchronous by Design
+
+Expensive execution and lifecycle processing happen outside latency-sensitive HTTP requests.
+
+## Explicit Trust Boundaries
+
+Security assumptions and infrastructure limitations are documented rather than hidden behind vague guarantees.
+
+## Replaceable Infrastructure
+
+The competitive domain is designed so infrastructure implementations can evolve without rewriting competitive rules.
+
+---
+
+# Known Engineering Boundaries
+
+Clutch is a functional competitive system, but some areas remain deliberate engineering boundaries rather than finished production infrastructure.
+
+### Sandbox Isolation
+
+Docker provides practical isolation and resource controls.
+
+It is not treated as a mathematically perfect hostile-code execution boundary.
+
+Higher-assurance deployments can move toward stronger isolation mechanisms.
+
+### Runtime Performance
+
+Compiled-language cold execution remains an optimization target.
+
+Potential improvements include:
+
+* build caching
+* runtime reuse
+* compilation optimization
+* distributed execution workers
+
+### Editor Experience
+
+The current editor focuses on competitive functionality rather than reproducing a full IDE environment.
+
+A more advanced editor can be added independently of the competitive backend.
+
+### Account Recovery
+
+Verification is implemented.
+
+Broader password and account recovery flows remain separate work.
+
+---
+
+# Project Status
+
+Clutch has moved beyond basic feature implementation.
+
+The current focus is:
 
 ```text
-Frontend
-  Next.js 15
-  React
-  TypeScript
+system validation
+competitive balancing
+operational hardening
+content expansion
+production readiness
+```
 
-API
-  Fastify 5
-  WebSockets
+Implemented systems include:
 
-Domain
-  TypeScript
-  server-authoritative business logic
-
-Persistence
-  PostgreSQL
-  Drizzle ORM
-
-Infrastructure
-  Redis
-  BullMQ
-  Docker
-
-Execution
-  Python
-  Node.js
-  g++
-  JDK
-  Go
-  Rust
-
-Testing
-  Vitest
-  E2E integration tests
-  real PostgreSQL
-  real Redis
-  real sandbox execution
+```text
+✓ Authentication
+✓ Session Management
+✓ Email Verification
+✓ Onboarding
+✓ Matchmaking
+✓ Placement Matches
+✓ Server-Authoritative Match Lifecycle
+✓ Multi-Language Execution
+✓ Docker Sandbox
+✓ Asynchronous Evaluation
+✓ ELO Ratings
+✓ Persistent Streaks
+✓ 72 Competitive Titles
+✓ 111 Competitive Questions
+✓ 9 Difficulty Bands
+✓ Seasons
+✓ Leaderboards
+✓ Spectating
+✓ Rooms
+✓ Challenges
+✓ Events
+✓ Tournament Infrastructure
+✓ WebSocket State Synchronization
+✓ Background Workers
+✓ Match History
+✓ Rating History
+✓ Audit Logging
+✓ Observability
+✓ End-to-End Competitive Verification
 ```
 
 ---
 
 # Why Clutch Exists
 
-Clutch is an experiment in treating competitive programming less like a submission form and more like a multiplayer system.
+Most coding platforms treat programming as an isolated submission:
 
-The interesting engineering problem isn't rendering a code editor.
+```text
+write
+  ↓
+submit
+  ↓
+accepted / rejected
+```
 
-It's making the entire chain trustworthy:
+Clutch treats programming competition as a multiplayer systems problem.
 
 ```text
 player
   ↓
 intent
   ↓
-server
+server validation
   ↓
 persistent state
   ↓
@@ -1189,16 +1169,34 @@ resolution
   ↓
 rating
   ↓
+progression
+  ↓
 history
 ```
 
-Every transition is an opportunity for race conditions, duplicated side effects, stale client state, inconsistent persistence, infrastructure failures, or incorrect authority boundaries.
+Every transition introduces real engineering problems:
 
-Clutch is built around making those boundaries explicit.
+```text
+race conditions
+duplicate requests
+stale clients
+inconsistent persistence
+worker failures
+execution isolation
+rating integrity
+realtime synchronization
+authority boundaries
+```
+
+Clutch exists to explore those problems as part of one competitive system.
+
+The editor is only one component.
+
+The actual engineering challenge is making the entire chain trustworthy.
 
 **The code is the game.**
 
-And the system has to be able to prove what happened.
+And the system should be able to explain how the game happened.
 
 ---
 
