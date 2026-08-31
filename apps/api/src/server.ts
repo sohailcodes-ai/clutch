@@ -14,6 +14,7 @@ import { handleError } from './middleware/auth.js'
 import { registerHttpRoutes } from './http/routes.js'
 import { registerDiscoveryRoutes } from './http/discovery-routes.js'
 import { registerAdminRoutes } from './http/admin-routes.js'
+import { registerSocialRoutes } from './http/social-routes.js'
 import { registerWsRoutes } from './ws/handler.js'
 
 const isProduction = process.env.NODE_ENV === 'production'
@@ -126,6 +127,7 @@ app.setErrorHandler(handleError)
 await registerHttpRoutes(app)
 await registerDiscoveryRoutes(app)
 await registerAdminRoutes(app)
+await registerSocialRoutes(app)
 await registerWsRoutes(app)
 
 app.get('/health', async () => ({ ok: true }))
@@ -201,8 +203,9 @@ declare module 'fastify' {
 }
 
 const isVercel = !!process.env.VERCEL
+const isVitest = !!process.env.VITEST
 
-if (!isVercel) {
+if (!isVercel && !isVitest) {
   const port = Number(process.env.API_PORT ?? 4000)
   const host = process.env.API_HOST ?? '0.0.0.0'
   try {

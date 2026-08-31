@@ -9,6 +9,7 @@ import { ClutchLogo } from '@/components/brand/clutch-logo'
 const LINKS = [
   { href: '/home', label: 'Home' },
   { href: '/explore', label: 'Explore' },
+  { href: '/friends', label: 'Friends' },
   { href: '/leaderboard', label: 'Ladder' },
   { href: '/rooms', label: 'Rooms' },
   { href: '/titles', label: 'Titles' },

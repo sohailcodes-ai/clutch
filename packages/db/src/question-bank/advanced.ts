@@ -1,0 +1,232 @@
+/**
+ * Advanced difficulty questions — complex DP, bitmask, interval DP, math-heavy, SCC.
+ */
+export const advancedQuestions = [
+  {
+    slug: 'traveling-salesman-bitmask',
+    title: 'Traveling Salesman Bitmask DP',
+    topic: 'algorithms',
+    tags: ['dp', 'bitmask', 'graph', 'tsp'],
+    difficultyId: 'advanced' as const,
+    promptMd: '# Traveling Salesman Bitmask DP\n\nYou are given n cities and a complete weighted directed graph. dist[i][j] is the cost of traveling from city i to city j. Find the minimum cost to visit every city exactly once starting from city 0 and returning to city 0.\n\n## Input Format\n- First line: integer n (2 ≤ n ≤ 16)\n- Next n lines: each contains n integers, the distance matrix (0 ≤ dist[i][j] ≤ 1000000, dist[i][i] = 0)\n\n## Output Format\n- Print one integer: the minimum tour cost',
+    examples: [
+      {
+        input: '3\n0 10 15\n10 0 20\n15 20 0',
+        output: '45',
+        explanation: 'Optimal tour: 0 -> 1 -> 2 -> 0, cost 10+20+15 = 45.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: '3\n0 10 15\n10 0 20\n15 20 0', expectedOutput: '45', weight: 1 },
+      { visibility: 'public' as const, input: '2\n0 5\n5 0', expectedOutput: '10', weight: 1 },
+      { visibility: 'hidden' as const, input: '4\n0 10 15 20\n10 0 35 25\n15 35 0 30\n20 25 30 0', expectedOutput: '55', weight: 2 },
+      { visibility: 'hidden' as const, input: '3\n0 1 10\n1 0 1\n10 1 0', expectedOutput: '12', weight: 2 },
+      { visibility: 'hidden' as const, input: '5\n0 3 4 2 7\n3 0 4 6 3\n4 4 0 5 8\n2 6 5 0 6\n7 3 8 6 0', expectedOutput: '19', weight: 3 },
+    ],
+  },
+  {
+    slug: 'matrix-chain-multiplication',
+    title: 'Matrix Chain Multiplication',
+    topic: 'algorithms',
+    tags: ['dp', 'interval-dp'],
+    difficultyId: 'advanced' as const,
+    promptMd: '# Matrix Chain Multiplication\n\nGiven a chain of n matrices, find the minimum number of scalar multiplications needed to compute the product. Matrix i has dimensions dim[i-1] x dim[i].\n\n## Input Format\n- First line: integer n (2 ≤ n ≤ 500)\n- Second line: n+1 integers dim[0], dim[1], ..., dim[n] (1 ≤ dim[i] ≤ 1000)\n\n## Output Format\n- Print one integer: the minimum number of multiplications',
+    examples: [
+      {
+        input: '3\n10 30 5 60',
+        output: '4500',
+        explanation: 'Optimal parenthesization: (A1 x A2) x A3 costs 10*30*5 + 10*5*60 = 1500+3000 = 4500.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: '3\n10 30 5 60', expectedOutput: '4500', weight: 1 },
+      { visibility: 'public' as const, input: '2\n10 20 30', expectedOutput: '6000', weight: 1 },
+      { visibility: 'hidden' as const, input: '4\n40 20 30 10 30', expectedOutput: '26000', weight: 2 },
+      { visibility: 'hidden' as const, input: '5\n10 20 30 40 30 50', expectedOutput: '45000', weight: 2 },
+      { visibility: 'hidden' as const, input: '2\n1 100 1', expectedOutput: '100', weight: 2 },
+    ],
+  },
+  {
+    slug: 'strongly-connected-components',
+    title: 'Count Strongly Connected Components',
+    topic: 'algorithms',
+    tags: ['graph', 'scc', 'tarjan'],
+    difficultyId: 'advanced' as const,
+    promptMd: '# Count Strongly Connected Components\n\nGiven a directed graph with n vertices and m edges, find the number of strongly connected components.\n\n## Input Format\n- First line: two integers n and m (1 ≤ n ≤ 100000, 0 ≤ m ≤ 200000)\n- Next m lines: two integers u and v (1 ≤ u, v ≤ n), a directed edge from u to v\n\n## Output Format\n- Print one integer: the number of SCCs',
+    examples: [
+      {
+        input: '5 5\n1 2\n2 3\n3 1\n3 4\n4 5',
+        output: '3',
+        explanation: 'SCCs: {1,2,3}, {4}, {5}.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: '5 5\n1 2\n2 3\n3 1\n3 4\n4 5', expectedOutput: '3', weight: 1 },
+      { visibility: 'public' as const, input: '3 3\n1 2\n2 3\n3 1', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '1 0', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '4 2\n1 2\n3 4', expectedOutput: '4', weight: 2 },
+      { visibility: 'hidden' as const, input: '6 7\n1 2\n2 3\n3 1\n3 4\n4 5\n5 6\n6 4', expectedOutput: '2', weight: 2 },
+      { visibility: 'hidden' as const, input: '5 0', expectedOutput: '5', weight: 2 },
+    ],
+  },
+  {
+    slug: 'modular-exponentiation',
+    title: 'Modular Exponentiation',
+    topic: 'algorithms',
+    tags: ['math', 'modular', 'number-theory'],
+    difficultyId: 'advanced' as const,
+    promptMd: '# Modular Exponentiation\n\nCompute a^b mod m using fast exponentiation. All values fit in 64-bit signed integers.\n\n## Input Format\n- Three integers a, b, m on one line (0 ≤ a, b ≤ 10^18, 1 ≤ m ≤ 10^9 + 7)\n\n## Output Format\n- Print one integer: a^b mod m',
+    examples: [
+      {
+        input: '2 10 1000000007',
+        output: '1024',
+        explanation: '2^10 = 1024.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: '2 10 1000000007', expectedOutput: '1024', weight: 1 },
+      { visibility: 'public' as const, input: '3 0 7', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '5 3 7', expectedOutput: '6', weight: 1 },
+      { visibility: 'hidden' as const, input: '7 256 13', expectedOutput: '9', weight: 2 },
+      { visibility: 'hidden' as const, input: '2 31 1000000007', expectedOutput: '147483634', weight: 3 },
+      { visibility: 'hidden' as const, input: '10 3 1000000007', expectedOutput: '1000', weight: 3 },
+    ],
+  },
+  {
+    slug: 'bitmask-subset-sum',
+    title: 'Bitmask Subset Sum Enumeration',
+    topic: 'algorithms',
+    tags: ['bitmask', 'dp', 'subsets'],
+    difficultyId: 'advanced' as const,
+    promptMd: '# Bitmask Subset Sum Enumeration\n\nGiven n positive integers and a target sum T, count the number of subsets whose elements sum to exactly T. Each element may be used at most once.\n\n## Input Format\n- First line: two integers n and T (1 ≤ n ≤ 30, 1 ≤ T ≤ 1000)\n- Second line: n positive integers (1 ≤ a[i] ≤ 1000)\n\n## Output Format\n- Print one integer: the count of subsets summing to T',
+    examples: [
+      {
+        input: '6 15\n1 2 3 4 5 8',
+        output: '3',
+        explanation: 'Subsets summing to 15: {2,5,8}, {3,4,8}, {1,2,3,4,5}.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: '6 15\n1 2 3 4 5 8', expectedOutput: '3', weight: 1 },
+      { visibility: 'public' as const, input: '3 5\n1 2 3', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '1 5\n5', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '1 5\n3', expectedOutput: '0', weight: 1 },
+      { visibility: 'hidden' as const, input: '4 10\n1 2 3 4', expectedOutput: '1', weight: 2 },
+      { visibility: 'hidden' as const, input: '3 1\n1 2 3', expectedOutput: '1', weight: 2 },
+    ],
+  },
+  {
+    slug: 'palindrome-partitioning',
+    title: 'Palindrome Partitioning',
+    topic: 'algorithms',
+    tags: ['dp', 'strings', 'palindrome'],
+    difficultyId: 'advanced' as const,
+    promptMd: '# Palindrome Partitioning\n\nGiven a string s, find the minimum number of cuts needed to partition s such that every substring in the partition is a palindrome.\n\n## Input Format\n- One string s (1 ≤ |s| ≤ 1000), lowercase English letters\n\n## Output Format\n- Print one integer: the minimum number of cuts',
+    examples: [
+      {
+        input: 'aab',
+        output: '1',
+        explanation: 'Cut after "aa": ["aa", "b"], both palindromes.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: 'aab', expectedOutput: '1', weight: 1 },
+      { visibility: 'public' as const, input: 'aba', expectedOutput: '0', weight: 1 },
+      { visibility: 'hidden' as const, input: 'a', expectedOutput: '0', weight: 1 },
+      { visibility: 'hidden' as const, input: 'ab', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: 'abcbm', expectedOutput: '2', weight: 2 },
+      { visibility: 'hidden' as const, input: 'abcba', expectedOutput: '0', weight: 2 },
+      { visibility: 'hidden' as const, input: 'abcd', expectedOutput: '3', weight: 2 },
+    ],
+  },
+  {
+    slug: 'topological-sort-lexicographic',
+    title: 'Lexicographically Smallest Topological Order',
+    topic: 'algorithms',
+    tags: ['graph', 'topological-sort', 'heap'],
+    difficultyId: 'advanced' as const,
+    promptMd: '# Lexicographically Smallest Topological Order\n\nGiven a directed acyclic graph (DAG) with n vertices and m edges, find the lexicographically smallest topological ordering. Use vertex labels 1 to n.\n\n## Input Format\n- First line: two integers n and m (1 ≤ n ≤ 100000, 0 ≤ m ≤ 200000)\n- Next m lines: two integers u and v (1 ≤ u, v ≤ n), a directed edge from u to v\n\n## Output Format\n- Print n integers: the topological order (space-separated)',
+    examples: [
+      {
+        input: '4 3\n1 2\n1 3\n2 4',
+        output: '1 2 3 4',
+        explanation: 'Vertex 1 has no predecessors. Among 2 and 3 (after 1), 2 comes first. Then 4.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: '4 3\n1 2\n1 3\n2 4', expectedOutput: '1 2 3 4', weight: 1 },
+      { visibility: 'public' as const, input: '1 0', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '3 2\n1 3\n2 3', expectedOutput: '1 2 3', weight: 1 },
+      { visibility: 'hidden' as const, input: '5 4\n2 1\n3 1\n4 2\n4 3', expectedOutput: '4 2 3 1 5', weight: 2 },
+      { visibility: 'hidden' as const, input: '6 5\n1 2\n2 3\n3 4\n4 5\n5 6', expectedOutput: '1 2 3 4 5 6', weight: 2 },
+    ],
+  },
+  {
+    slug: 'modular-combination-count',
+    title: 'Modular Combination Count',
+    topic: 'algorithms',
+    tags: ['math', 'combinatorics', 'modular'],
+    difficultyId: 'advanced' as const,
+    promptMd: "# Modular Combination Count\n\nCompute C(n, k) mod p where C(n, k) is the binomial coefficient \"n choose k\", and p is a prime number. Use Fermat's little theorem for modular inverses.\n\n## Input Format\n- Three integers n, k, p on one line (0 ≤ k ≤ n ≤ 10^6, 2 ≤ p ≤ 10^9 + 7, p is prime)\n\n## Output Format\n- Print one integer: C(n, k) mod p",
+    examples: [
+      {
+        input: '10 3 1000000007',
+        output: '120',
+        explanation: 'C(10,3) = 120.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: '10 3 1000000007', expectedOutput: '120', weight: 1 },
+      { visibility: 'public' as const, input: '5 0 1000000007', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '5 5 1000000007', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '10 5 1000000007', expectedOutput: '252', weight: 2 },
+      { visibility: 'hidden' as const, input: '1000000 500000 1000000007', expectedOutput: '794697833', weight: 3 },
+      { visibility: 'hidden' as const, input: '7 3 13', expectedOutput: '9', weight: 2 },
+    ],
+  },
+  {
+    slug: 'trie-pattern-matching',
+    title: 'Trie Pattern Matching Count',
+    topic: 'data-structures',
+    tags: ['trie', 'strings', 'data-structures'],
+    difficultyId: 'advanced' as const,
+    promptMd: '# Trie Pattern Matching Count\n\nGiven a dictionary of n words and a text string t, count how many dictionary words appear as substrings of t. Each word should be counted at most once even if it appears multiple times.\n\n## Input Format\n- First line: integer n (1 ≤ n ≤ 1000)\n- Next n lines: dictionary words (1 ≤ |word| ≤ 100), lowercase English letters\n- Last line: string t (1 ≤ |t| ≤ 100000), lowercase English letters\n\n## Output Format\n- Print one integer: the number of distinct dictionary words found in t',
+    examples: [
+      {
+        input: '3\nab\ncd\nabc\nabcde',
+        output: '2',
+        explanation: '"ab" and "abc" appear in "abcde". "cd" does not.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: '3\nab\ncd\nabc\nabcde', expectedOutput: '2', weight: 1 },
+      { visibility: 'public' as const, input: '1\nhello\nhello', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '2\nxyz\nxyz\nabcdef', expectedOutput: '0', weight: 1 },
+      { visibility: 'hidden' as const, input: '3\na\naa\naaa\naaaa', expectedOutput: '3', weight: 2 },
+      { visibility: 'hidden' as const, input: '5\nab\ncd\nef\nabcd\nabcdef\nabcde', expectedOutput: '3', weight: 2 },
+    ],
+  },
+  {
+    slug: 'bitonic-sort-sequence',
+    title: 'Longest Bitonic Subsequence',
+    topic: 'algorithms',
+    tags: ['dp', 'bitonic', 'subsequence'],
+    difficultyId: 'advanced' as const,
+    promptMd: '# Longest Bitonic Subsequence\n\nA bitonic subsequence first strictly increases, then strictly decreases. Given an array of n integers, find the length of the longest bitonic subsequence. The increasing or decreasing part may be empty (length 1 is always valid).\n\n## Input Format\n- First line: integer n (1 ≤ n ≤ 1000)\n- Second line: n integers a[1], ..., a[n] (1 ≤ a[i] ≤ 100000)\n\n## Output Format\n- Print one integer: the length of the longest bitonic subsequence',
+    examples: [
+      {
+        input: '5\n1 2 5 3 2',
+        output: '5',
+        explanation: 'The entire array is bitonic: 1 < 2 < 5 > 3 > 2.',
+      },
+    ],
+    testCases: [
+      { visibility: 'public' as const, input: '5\n1 2 5 3 2', expectedOutput: '5', weight: 1 },
+      { visibility: 'public' as const, input: '3\n1 2 3', expectedOutput: '3', weight: 1 },
+      { visibility: 'hidden' as const, input: '3\n3 2 1', expectedOutput: '3', weight: 1 },
+      { visibility: 'hidden' as const, input: '1\n5', expectedOutput: '1', weight: 1 },
+      { visibility: 'hidden' as const, input: '6\n1 2 3 6 5 4', expectedOutput: '6', weight: 2 },
+      { visibility: 'hidden' as const, input: '7\n1 2 3 8 7 6 5', expectedOutput: '7', weight: 2 },
+    ],
+  },
+]

@@ -27,6 +27,8 @@ import { writeAuditLog } from '../audit.js'
  *   { "type": "comeback" }                             // won from behind
  *   { "type": "first_blood_fast",  "value": 60000 }   // ms
  *   { "type": "first_blood" }
+ *   { "type": "first_blood_count", "value": 5 }       // count of first bloods
+ *   { "type": "comeback_count",    "value": 5 }       // count of comeback wins
  *   { "type": "underdog_wins",     "value": 5 }       // vs 200+ higher rated
  *   { "type": "clean_sweeps",      "value": 10 }      // all tests passed on final
  *   { "type": "perfect_execution", "value": 20 }      // accepted first try across matches
@@ -49,6 +51,8 @@ export type TitleCriteria =
   | { type: 'first_blood' }
   | { type: 'comeback' }
   | { type: 'first_blood_fast'; value: number }
+  | { type: 'first_blood_count'; value: number }
+  | { type: 'comeback_count'; value: number }
   | { type: 'underdog_wins'; value: number }
   | { type: 'clean_sweeps'; value: number }
   | { type: 'perfect_execution'; value: number }
@@ -71,6 +75,8 @@ export function isTitleCriteria(value: unknown): value is TitleCriteria {
     case 'top_rank':
     case 'fast_win':
     case 'first_blood_fast':
+    case 'first_blood_count':
+    case 'comeback_count':
     case 'underdog_wins':
     case 'clean_sweeps':
     case 'perfect_execution':
@@ -186,6 +192,10 @@ export function evaluateCriteria(criteria: TitleCriteria, facts: CompetitiveFact
         facts.fastestWinMs !== null &&
         facts.fastestWinMs <= criteria.value
       )
+    case 'first_blood_count':
+      return facts.firstBloods >= criteria.value
+    case 'comeback_count':
+      return facts.comebackWins >= criteria.value
     case 'underdog_wins':
       return facts.underdogWins >= criteria.value
     case 'clean_sweeps':
@@ -238,6 +248,10 @@ export function titleProgress(
       return facts.fastestWinMs !== null ? pick(facts.fastestWinMs, criteria.value) : null
     case 'underdog_wins':
       return pick(facts.underdogWins, criteria.value)
+    case 'first_blood_count':
+      return pick(facts.firstBloods, criteria.value)
+    case 'comeback_count':
+      return pick(facts.comebackWins, criteria.value)
     case 'clean_sweeps':
       return pick(facts.cleanSweeps, criteria.value)
     case 'perfect_execution':

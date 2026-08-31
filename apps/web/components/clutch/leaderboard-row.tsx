@@ -16,11 +16,13 @@ export type LeaderboardEntryDto = {
   draws: number
   percentile?: number | null
   titles?: { code: string; name: string }[]
+  equippedTitleId?: string | null
 }
 
 /** Reusable leaderboard row built on public competitive identity only. */
 export function LeaderboardRow({ entry }: { entry: LeaderboardEntryDto }) {
   const podium = entry.rank <= 3
+  const equippedTitle = entry.titles?.[0]
   return (
     <Link
       href={`/profile/${entry.handle ?? ''}`}
@@ -50,6 +52,11 @@ export function LeaderboardRow({ entry }: { entry: LeaderboardEntryDto }) {
         <p className="label-mono text-[0.58rem] uppercase text-muted-foreground">
           {entry.tierId ?? 'unranked'} · {entry.wins}W/{entry.losses}L/{entry.draws}D · peak{' '}
           {entry.peakRating}
+          {equippedTitle ? (
+            <span className="ml-2 border border-border px-1 py-0 text-[0.55rem] text-foreground/70">
+              {equippedTitle.name}
+            </span>
+          ) : null}
         </p>
       </div>
       <span className="data-mono shrink-0 text-base font-black text-primary">{entry.rating}</span>

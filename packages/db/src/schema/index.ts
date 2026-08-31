@@ -85,6 +85,19 @@ export const bracketNodeStatusEnum = pgEnum('bracket_node_status', [
   'active',
   'completed',
 ])
+export const friendshipStatusEnum = pgEnum('friendship_status', [
+  'pending',
+  'accepted',
+  'declined',
+])
+export const challengeStatusEnum = pgEnum('challenge_status', [
+  'pending',
+  'accepted',
+  'declined',
+  'expired',
+  'cancelled',
+  'match_created',
+])
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -863,3 +876,63 @@ export const verificationTokens = pgTable('verification_tokens', {
 }, (table) => [
   index('idx_verification_tokens_user').on(table.userId),
 ])
+
+// ---------------------------------------------------------------------------
+// Friendships
+// ---------------------------------------------------------------------------
+
+export const friendships = pgTable(
+  'friendships',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    requesterId: uuid('requester_id')
+      .notNull()
+      .references(() => users.id),
+    addresseeId: uuid('addressee_id')
+      .notNull()
+      .references(() => users.id),
+    status: friendshipStatusEnum('status').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_friendships_requester').on(table.requesterId, table.status),
+    index('idx_friendships_addressee').on(table.addresseeId, table.status),
+    // Prevent duplicate friendships in either direction:
+    // Using a unique index with LEAST/GREATEST to normalize (A,B) and (B,A)
+    uniqueIndex('uq_friendships_pair')
+      .on(table.requesterId, table.addresseeId),
+  ],
+)
+
+// ---------------------------------------------------------------------------
+// Challenges
+// ---------------------------------------------------------------------------
+
+export const challenges = pgTable(
+  'challenges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    challengerId: uuid('challenger_id')
+      .notNull()
+      .references(() => users.id),
+    challengedId: uuid('challenged_id')
+      .notNull()
+      .references(() => users.id),
+    status: challengeStatusEnum('status').notNull().default('pending'),
+    stackId: text('stack_id')
+      .notNull()
+      .references(() => stacks.id),
+    difficultyId: text('difficulty_id')
+      .references(() => difficultyBands.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    matchId: uuid('match_id').references((): AnyPgColumn => matches.id, { onDelete: 'set null' }),
+  },
+  (table) => [
+    index('idx_challenges_challenger').on(table.challengerId, table.status),
+    index('idx_challenges_challenged').on(table.challengedId, table.status),
+    index('idx_challenges_expires').on(table.expiresAt),
+  ],
+)

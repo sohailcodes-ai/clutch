@@ -18,6 +18,8 @@ describe('title criteria vocabulary', () => {
     expect(isTitleCriteria({ type: 'top_rank', value: 100 })).toBe(true)
     expect(isTitleCriteria({ type: 'fast_win', value: 60000 })).toBe(true)
     expect(isTitleCriteria({ type: 'first_blood_fast', value: 60000 })).toBe(true)
+    expect(isTitleCriteria({ type: 'first_blood_count', value: 5 })).toBe(true)
+    expect(isTitleCriteria({ type: 'comeback_count', value: 5 })).toBe(true)
     expect(isTitleCriteria({ type: 'comeback' })).toBe(true)
     expect(isTitleCriteria({ type: 'win_streak' })).toBe(false)
     expect(isTitleCriteria({ type: 'exploit', value: 1 })).toBe(false)
@@ -76,6 +78,23 @@ describe('extended evaluation (deterministic, server-authoritative)', () => {
       ),
     ).toBe(false)
   })
+
+  it('first_blood_count uses count not boolean', () => {
+    expect(evaluateCriteria({ type: 'first_blood_count', value: 5 }, { ...base, firstBloods: 5 })).toBe(true)
+    expect(evaluateCriteria({ type: 'first_blood_count', value: 5 }, { ...base, firstBloods: 4 })).toBe(false)
+    expect(evaluateCriteria({ type: 'first_blood_count', value: 1 }, { ...base, firstBloods: 1 })).toBe(true)
+  })
+
+  it('comeback_count uses count not boolean', () => {
+    expect(evaluateCriteria({ type: 'comeback_count', value: 5 }, { ...base, comebackWins: 5 })).toBe(true)
+    expect(evaluateCriteria({ type: 'comeback_count', value: 5 }, { ...base, comebackWins: 4 })).toBe(false)
+    expect(evaluateCriteria({ type: 'comeback_count', value: 1 }, { ...base, comebackWins: 1 })).toBe(true)
+  })
+
+  it('draws criteria works correctly', () => {
+    expect(evaluateCriteria({ type: 'draws', value: 5 }, { ...base, draws: 5 })).toBe(true)
+    expect(evaluateCriteria({ type: 'draws', value: 5 }, { ...base, draws: 4 })).toBe(false)
+  })
 })
 
 describe('title progress', () => {
@@ -92,6 +111,15 @@ describe('title progress', () => {
   it('returns null for boolean or unobserved criteria', () => {
     expect(titleProgress({ type: 'comeback' }, base)).toBeNull()
     expect(titleProgress({ type: 'top_rank', value: 100 }, base)).toBeNull()
+  })
+
+  it('reports progress for first_blood_count and comeback_count', () => {
+    expect(titleProgress({ type: 'first_blood_count', value: 10 }, { ...base, firstBloods: 3 })).toEqual({ current: 3, target: 10 })
+    expect(titleProgress({ type: 'comeback_count', value: 10 }, { ...base, comebackWins: 7 })).toEqual({ current: 7, target: 10 })
+  })
+
+  it('reports progress for draws', () => {
+    expect(titleProgress({ type: 'draws', value: 5 }, { ...base, draws: 3 })).toEqual({ current: 3, target: 5 })
   })
 
   it('is deterministic across runs', () => {

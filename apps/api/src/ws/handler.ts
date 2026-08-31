@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify'
 import type { WebSocket } from 'ws'
 import type { Redis } from 'ioredis'
 import { z } from 'zod'
+import { and, eq } from '@clutch/db'
+import { schema } from '@clutch/db'
 import { hasPermission, wsClientEvents } from '@clutch/shared'
 import {
   getSessionUser,
@@ -14,7 +16,10 @@ import {
   getRoomDetail,
   getTournament,
   getTournamentBracket,
+  listFriends,
+  getMatchSnapshot as getMatchSnapshotForSpectator,
 } from '@clutch/domain'
+import { publishMatchEvent } from '@clutch/domain'
 
 const clientMessageSchema = z.object({
   type: z.string().min(1).max(64),
@@ -359,6 +364,184 @@ export async function registerWsRoutes(app: FastifyInstance) {
               ts: new Date().toISOString(),
               tournamentId: tDetail.id,
               payload: { tournament: tDetail, bracket: tBracket },
+            })
+            break
+          }
+
+          // --- Friends subscription (presence of friends) --------------------
+          case wsClientEvents.FRIENDS_SUBSCRIBE: {
+            await subscriber.subscribe(`user:${userId}`)
+            // Send current friends list with presence
+            const friends = await listFriends(request.server.db, request.server.redis, userId)
+            send(socket, {
+              type: 'friends.snapshot',
+              id: crypto.randomUUID(),
+              ts: new Date().toISOString(),
+              payload: { friends },
+            })
+            break
+          }
+
+          // --- Spectator subscription (live match viewing) -------------------
+          case wsClientEvents.SPECTATOR_SUBSCRIBE: {
+            if (!msg.matchId) {
+              sendError(socket, 'matchId required')
+              break
+            }
+            // Get the match to check if it allows live code spectating
+            const specMatch = await request.server.db.query.matches.findFirst({
+              where: eq(schema.matches.id, msg.matchId),
+            })
+            if (!specMatch) {
+              sendError(socket, 'Match not found', 'NOT_FOUND')
+              break
+            }
+
+            // Check if user is a participant (they get full access)
+            const isParticipant = await request.server.db.query.matchParticipants.findFirst({
+              where: and(
+                eq(schema.matchParticipants.matchId, msg.matchId),
+                eq(schema.matchParticipants.userId, userId),
+              ),
+            })
+
+            // Check if user is admin observer
+            const isAdminObserver =
+              hasPermission(user.role, 'admin.matches.inspect') &&
+              (await hasActiveObservation(request.server.db, msg.matchId, userId))
+
+            // For spectators: allow if match is active and either:
+            // 1. It's a non-ranked challenge match (allows live code)
+            // 2. User is admin observer
+            // 3. User is a participant
+            const isChallengeMatch = !specMatch.ranked
+            const isLiveCodeAllowed = isChallengeMatch || isAdminObserver || !!isParticipant
+
+            if (!isParticipant && !isAdminObserver && specMatch.status !== 'active') {
+              sendError(socket, 'Match is not available for spectating', 'FORBIDDEN')
+              break
+            }
+
+            await subscriber.subscribe(`match:${msg.matchId}`)
+            await subscriber.subscribe(`editor:${msg.matchId}`)
+
+            // Send spectator count update
+            const spectatorCountKey = `spectators:${msg.matchId}`
+            await request.server.redis.incr(spectatorCountKey)
+            await request.server.redis.expire(spectatorCountKey, 300)
+
+            // Get the match snapshot
+            const specSnapshot = await getMatchSnapshot(request.server.db, msg.matchId, userId)
+
+            send(socket, {
+              type: 'spectator.snapshot',
+              id: crypto.randomUUID(),
+              ts: new Date().toISOString(),
+              matchId: msg.matchId,
+              payload: {
+                match: specSnapshot,
+                liveCodeAllowed: isLiveCodeAllowed,
+                mode: isParticipant ? 'participant' : isAdminObserver ? 'admin_observer' : 'spectator',
+              },
+            })
+
+            // Broadcast spectator count
+            const count = await request.server.redis.get(spectatorCountKey)
+            await publishMatchEvent(request.server.redis, msg.matchId, {
+              type: 'spectator.count',
+              payload: { count: parseInt(count ?? '0', 10) },
+            })
+            break
+          }
+
+          // --- Spectator resync -----------------------------------------------
+          case wsClientEvents.SPECTATOR_RESYNC: {
+            if (!msg.matchId) {
+              sendError(socket, 'matchId required')
+              break
+            }
+            const resyncSnapshot = await getMatchSnapshot(request.server.db, msg.matchId, userId)
+            const resyncEvents = await getMatchEventsSince(
+              request.server.db,
+              msg.matchId,
+              msg.lastEventId,
+            )
+            send(socket, {
+              type: 'spectator.snapshot',
+              id: crypto.randomUUID(),
+              ts: new Date().toISOString(),
+              matchId: msg.matchId,
+              payload: { match: resyncSnapshot, eventsSince: resyncEvents.length },
+            })
+            for (const event of resyncEvents.slice(-50)) {
+              send(socket, {
+                type: event.eventType,
+                id: `evt-${event.id}`,
+                ts: event.createdAt.toISOString(),
+                matchId: msg.matchId,
+                payload: event.payload,
+              })
+            }
+            break
+          }
+
+          // --- Editor update (player sends, server broadcasts) ----------------
+          case wsClientEvents.EDITOR_UPDATE: {
+            if (!msg.matchId) {
+              sendError(socket, 'matchId required')
+              break
+            }
+            // Only match participants may send editor updates
+            const editorParticipant = await request.server.db.query.matchParticipants.findFirst({
+              where: and(
+                eq(schema.matchParticipants.matchId, msg.matchId),
+                eq(schema.matchParticipants.userId, userId),
+              ),
+            })
+            if (!editorParticipant) {
+              sendError(socket, 'Not a match participant', 'FORBIDDEN')
+              break
+            }
+
+            // Check match is active
+            const editorMatch = await request.server.db.query.matches.findFirst({
+              where: eq(schema.matches.id, msg.matchId),
+            })
+            if (!editorMatch || editorMatch.status !== 'active') {
+              sendError(socket, 'Match is not active', 'MATCH_NOT_ACTIVE')
+              break
+            }
+
+            // Only broadcast for challenge (non-ranked) matches
+            if (editorMatch.ranked) {
+              // Silently accept but don't broadcast for ranked matches
+              send(socket, {
+                type: 'editor.update_ack',
+                id: msg.id ?? crypto.randomUUID(),
+                ts: new Date().toISOString(),
+                matchId: msg.matchId,
+                payload: { accepted: true, broadcast: false },
+              })
+              break
+            }
+
+            // Broadcast the editor update to spectators (not to the sender)
+            const editorPayload = msg.payload as Record<string, unknown> | undefined
+            await publishMatchEvent(request.server.redis, msg.matchId, {
+              type: 'editor.update_broadcast',
+              payload: {
+                userId,
+                slot: editorParticipant.slot,
+                ...(editorPayload ?? {}),
+              },
+            })
+
+            send(socket, {
+              type: 'editor.update_ack',
+              id: msg.id ?? crypto.randomUUID(),
+              ts: new Date().toISOString(),
+              matchId: msg.matchId,
+              payload: { accepted: true, broadcast: true },
             })
             break
           }

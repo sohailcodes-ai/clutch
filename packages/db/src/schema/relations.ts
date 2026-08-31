@@ -31,6 +31,8 @@ import {
   tournamentRegistrations,
   tournamentRounds,
   tournamentBracketNodes,
+  friendships,
+  challenges,
 } from './index.js'
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -241,4 +243,24 @@ export const tournamentBracketNodesRelations = relations(tournamentBracketNodes,
     fields: [tournamentBracketNodes.winnerUserId],
     references: [users.id],
   }),
+}))
+
+// ---------------------------------------------------------------------------
+// Friendships
+// ---------------------------------------------------------------------------
+
+export const friendshipsRelations = relations(friendships, ({ one }) => ({
+  requester: one(users, { fields: [friendships.requesterId], references: [users.id] }),
+  addressee: one(users, { fields: [friendships.addresseeId], references: [users.id] }),
+}))
+
+// ---------------------------------------------------------------------------
+// Challenges
+// ---------------------------------------------------------------------------
+
+export const challengesRelations = relations(challenges, ({ one }) => ({
+  challenger: one(users, { fields: [challenges.challengerId], references: [users.id] }),
+  challenged: one(users, { fields: [challenges.challengedId], references: [users.id] }),
+  stack: one(stacks, { fields: [challenges.stackId], references: [stacks.id] }),
+  match: one(matches, { fields: [challenges.matchId], references: [matches.id] }),
 }))

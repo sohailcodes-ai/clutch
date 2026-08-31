@@ -186,6 +186,16 @@ export const TOURNAMENT_LIMITS = {
 
 /**
  * ============================================================================
+ * FRIENDS & CHALLENGES
+ * ============================================================================
+ */
+export const CHALLENGE_EXPIRY_SEC = 300 // 5 minutes to accept
+export const CHALLENGE_READY_WINDOW_SEC = 30
+export const MAX_PENDING_FRIEND_REQUESTS = 20
+export const MAX_OUTGOING_CHALLENGES = 5
+
+/**
+ * ============================================================================
  * ADMIN ROLES & PERMISSIONS
  * ----------------------------------------------------------------------------
  * Roles are stored on users.role (data); the permission matrix below is the

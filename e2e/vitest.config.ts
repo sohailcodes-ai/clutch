@@ -18,5 +18,10 @@ export default defineConfig({
     testTimeout: 120_000,
     hookTimeout: 60_000,
     environment: 'node',
+    globalSetup: ['./e2e/global-setup.ts'],
+    singleThread: true,
+    sequence: { concurrent: false },
+    pool: 'forks',
+    poolOptions: { forks: { singleFork: true } },
   },
 })

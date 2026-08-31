@@ -31,6 +31,7 @@ export async function getLeaderboard(db: Database, stackId: string, limit = 50, 
       losses: row.losses,
       draws: row.draws,
       tierId: row.tierId,
+      equippedTitleId: row.user.profile?.equippedTitleId ?? null,
       percentile: null as number | null,
       titles: [] as { code: string; name: string }[],
     }))
@@ -42,7 +43,7 @@ export async function getLeaderboard(db: Database, stackId: string, limit = 50, 
 /** Fills percentile (vs full eligible board) and each player's top titles. */
 async function enrichEntries(
   db: Database,
-  entries: { userId: string; rank: number; percentile: number | null; titles: { code: string; name: string }[] }[],
+  entries: { userId: string; rank: number; percentile: number | null; equippedTitleId: string | null; titles: { code: string; name: string }[] }[],
   stackId: string,
 ) {
   if (entries.length === 0) return
@@ -70,10 +71,16 @@ async function enrichEntries(
     with: { title: true },
   })
   for (const e of entries) {
-    e.titles = awards
-      .filter((a) => a.userId === e.userId)
-      .slice(0, 3)
-      .map((a) => ({ code: a.title.code, name: a.title.name }))
+    const userAwards = awards.filter((a) => a.userId === e.userId)
+    // Prefer the equipped title if it exists among awards
+    const equipped = e.equippedTitleId
+      ? userAwards.find((a) => a.titleId === e.equippedTitleId)
+      : undefined
+    if (equipped) {
+      e.titles = [{ code: equipped.title.code, name: equipped.title.name }]
+    } else {
+      e.titles = userAwards.slice(0, 1).map((a) => ({ code: a.title.code, name: a.title.name }))
+    }
   }
 }
 

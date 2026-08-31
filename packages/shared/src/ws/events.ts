@@ -10,6 +10,10 @@ export const wsClientEvents = {
   ROOM_RESYNC: 'room.resync',
   TOURNAMENT_SUBSCRIBE: 'tournament.subscribe',
   TOURNAMENT_RESYNC: 'tournament.resync',
+  FRIENDS_SUBSCRIBE: 'friends.subscribe',
+  SPECTATOR_SUBSCRIBE: 'spectator.subscribe',
+  SPECTATOR_RESYNC: 'spectator.resync',
+  EDITOR_UPDATE: 'editor.update',
 } as const
 
 export const wsServerEvents = {
@@ -55,6 +59,24 @@ export const wsServerEvents = {
   TOURNAMENT_FINAL_STARTED: 'tournament.final_started',
   TOURNAMENT_COMPLETED: 'tournament.completed',
   TOURNAMENT_SNAPSHOT: 'tournament.snapshot',
+  // Social / presence events
+  PRESENCE_UPDATED: 'presence.updated',
+  FRIEND_REQUEST: 'friend.request',
+  FRIEND_ACCEPTED: 'friend.accepted',
+  FRIEND_REMOVED: 'friend.removed',
+  CHALLENGE_RECEIVED: 'challenge.received',
+  CHALLENGE_ACCEPTED: 'challenge.accepted',
+  CHALLENGE_DECLINED: 'challenge.declined',
+  CHALLENGE_EXPIRED: 'challenge.expired',
+  CHALLENGE_CANCELLED: 'challenge.cancelled',
+  CHALLENGE_MATCH_CREATED: 'challenge.match_created',
+  // Spectator / live code events
+  SPECTATOR_SNAPSHOT: 'spectator.snapshot',
+  SPECTATOR_JOINED: 'spectator.joined',
+  SPECTATOR_LEFT: 'spectator.left',
+  SPECTATOR_COUNT: 'spectator.count',
+  EDITOR_SNAPSHOT: 'editor.snapshot',
+  EDITOR_UPDATE_BROADCAST: 'editor.update_broadcast',
   ERROR: 'error',
 } as const
 
