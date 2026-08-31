@@ -50,6 +50,13 @@
       "when": 1787661775919,
       "tag": "0006_shocking_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788112777299,
+      "tag": "0007_icy_molten_man",
+      "breakpoints": true
     }
   ]
 }

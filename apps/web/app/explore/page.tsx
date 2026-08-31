@@ -5,16 +5,12 @@ import { useEffect, useState } from 'react'
 import {
   api,
   ApiError,
-  type EventDto,
   type LiveMatchDto,
   type RecentResultDto,
   type RoomListItemDto,
-  type TournamentDto,
 } from '@/lib/api'
 import AppNav from '@/components/clutch/app-nav'
 import MatchCard from '@/components/clutch/match-card'
-import EventCard from '@/components/clutch/event-card'
-import TournamentCard from '@/components/clutch/tournament-card'
 import RoomCard from '@/components/clutch/room-card'
 import { ErrorState, Loading, Panel, SectionTitle } from '@/components/clutch/states'
 
@@ -22,25 +18,19 @@ export default function ExplorePage() {
   const [live, setLive] = useState<LiveMatchDto[] | null>(null)
   const [results, setResults] = useState<RecentResultDto[] | null>(null)
   const [rooms, setRooms] = useState<RoomListItemDto[] | null>(null)
-  const [events, setEvents] = useState<EventDto[] | null>(null)
-  const [tournaments, setTournaments] = useState<TournamentDto[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function loadAll() {
     setError(null)
     try {
-      const [liveRes, resultsRes, roomsRes, eventsRes, tournamentsRes] = await Promise.all([
+      const [liveRes, resultsRes, roomsRes] = await Promise.all([
         api.get<{ liveMatches: LiveMatchDto[] }>('/explore/live'),
         api.get<{ results: RecentResultDto[] }>('/explore/results'),
         api.get<{ rooms: RoomListItemDto[] }>('/rooms'),
-        api.get<{ events: EventDto[] }>('/events'),
-        api.get<{ tournaments: TournamentDto[] }>('/tournaments'),
       ])
       setLive(liveRes.liveMatches)
       setResults(resultsRes.results)
       setRooms(roomsRes.rooms)
-      setEvents(eventsRes.events)
-      setTournaments(tournamentsRes.tournaments)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load explore feed')
     }
@@ -92,40 +82,6 @@ export default function ExplorePage() {
             <div className="grid gap-3 md:grid-cols-2">
               {rooms.slice(0, 6).map((r) => (
                 <RoomCard key={r.id} room={r} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* EVENTS */}
-        <div>
-          <SectionTitle>Events</SectionTitle>
-          {!events ? (
-            <Loading label="Loading events" />
-          ) : events.length === 0 ? (
-            <Panel className="label-mono text-xs text-muted-foreground">No scheduled events.</Panel>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {events.map((e) => (
-                <EventCard key={e.id} event={e} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* TOURNAMENTS */}
-        <div>
-          <SectionTitle>Tournaments</SectionTitle>
-          {!tournaments ? (
-            <Loading label="Loading tournaments" />
-          ) : tournaments.length === 0 ? (
-            <Panel className="label-mono text-xs text-muted-foreground">
-              No tournaments announced yet.
-            </Panel>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {tournaments.map((t) => (
-                <TournamentCard key={t.id} tournament={t} />
               ))}
             </div>
           )}

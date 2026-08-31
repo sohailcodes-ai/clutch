@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   outputFileTracingRoot: new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'),
   async headers() {
     return [

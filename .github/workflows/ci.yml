@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: clutch
+          POSTGRES_PASSWORD: clutch
+          POSTGRES_DB: clutch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clutch"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://clutch:clutch@localhost:5432/clutch
+      REDIS_URL: redis://localhost:6379
+      SESSION_SECRET: test-secret-that-is-at-least-32-characters-long-for-ci
+      NODE_ENV: test
+      SANDBOX_MODE: child_process
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build shared
+        run: pnpm --filter @clutch/shared build
+
+      - name: Build db
+        run: pnpm --filter @clutch/db build
+
+      - name: Build domain
+        run: pnpm --filter @clutch/domain build
+
+      - name: Build API
+        run: pnpm --filter @clutch/api build
+
+      - name: Build Worker
+        run: pnpm --filter @clutch/worker build
+
+      - name: Build Web
+        run: pnpm --filter @clutch/web build
+
+      - name: Docker build - API
+        run: docker build -t clutch-api:ci -f Dockerfile .
+
+      - name: Docker build - Worker
+        run: docker build -t clutch-worker:ci -f Dockerfile.worker .
+
+      - name: Docker build - Web
+        run: docker build -t clutch-web:ci -f Dockerfile.web .

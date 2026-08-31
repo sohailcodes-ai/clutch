@@ -159,6 +159,31 @@ importers:
         specifier: 5.7.3
         version: 5.7.3
 
+  e2e:
+    dependencies:
+      '@clutch/db':
+        specifier: workspace:*
+        version: link:../packages/db
+      '@clutch/domain':
+        specifier: workspace:*
+        version: link:../packages/domain
+      bullmq:
+        specifier: ^5.50.0
+        version: 5.81.3
+      drizzle-orm:
+        specifier: ^0.44.0
+        version: 0.44.7(postgres@3.4.9)
+      fastify:
+        specifier: ^5.3.3
+        version: 5.12.1
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.11.1
+    devDependencies:
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.2.0)(msw@2.15.0(@types/node@26.2.0)(typescript@5.7.3))(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+
   packages/db:
     dependencies:
       '@clutch/shared':

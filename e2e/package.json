@@ -1,0 +1,17 @@
+{
+  "name": "@clutch/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@clutch/db": "workspace:*",
+    "@clutch/domain": "workspace:*",
+    "drizzle-orm": "^0.44.0",
+    "fastify": "^5.3.3",
+    "ioredis": "^5.6.1",
+    "bullmq": "^5.50.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.11"
+  }
+}

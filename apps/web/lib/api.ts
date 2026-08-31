@@ -454,3 +454,45 @@ export type AdminFlagDto = {
   userHandle: string | null
   createdAt: string
 }
+
+// ---------------------------------------------------------------------------
+// Profile history DTOs
+// ---------------------------------------------------------------------------
+
+export type MatchHistoryEntry = {
+  matchId: string
+  publicId: string
+  opponent: {
+    handle: string
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
+  stackId: string
+  result: 'win' | 'loss' | 'draw' | 'forfeit' | null
+  ratingBefore: number
+  ratingAfter: number
+  ratingDelta: number
+  startedAt: string | null
+  endedAt: string | null
+  status: string
+}
+
+export type RatingHistoryEntry = {
+  matchId: string
+  publicId: string | null
+  stackId: string
+  ratingBefore: number
+  ratingDelta: number
+  ratingAfter: number
+  createdAt: string
+}
+
+export type PlayerStats = {
+  handle: string
+  total: number
+  wins: number
+  losses: number
+  draws: number
+  forfeits: number
+  winRate: number
+}

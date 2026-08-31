@@ -56,6 +56,9 @@ import {
   getRuntime,
   requestVerification,
   verifyOtp,
+  getMatchHistory,
+  getRatingHistory,
+  getPlayerStats,
 } from '@clutch/domain'
 import { requireAuth } from '../middleware/auth.js'
 
@@ -111,6 +114,16 @@ function parse<T extends z.ZodTypeAny>(schema: T, data: unknown): z.infer<T> {
     throw new AppError(ErrorCodes.VALIDATION, 'Invalid request', 400)
   }
   return parsed.data
+}
+
+function requireEmailVerified(user: SessionUser) {
+  if (!user.emailVerifiedAt) {
+    throw new AppError(
+      ErrorCodes.FORBIDDEN,
+      'Email verification required. Please verify your email before using this feature.',
+      403,
+    )
+  }
 }
 
 function setSessionCookie(reply: FastifyReply, token: string, expiresAt: Date) {
@@ -251,6 +264,42 @@ export async function registerHttpRoutes(app: FastifyInstance) {
     const profile = await getPublicProfile(request.server.db, handle)
     if (!profile) throw new AppError(ErrorCodes.NOT_FOUND, 'Player not found', 404)
     return { player: profile }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Match history & rating history
+  // ---------------------------------------------------------------------------
+  app.get('/players/:handle/matches', async (request) => {
+    const { handle } = parse(z.object({ handle: z.string().min(3).max(24) }), request.params)
+    const query = parse(
+      z.object({
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+        offset: z.coerce.number().int().min(0).max(10000).default(0),
+      }),
+      request.query,
+    )
+    const matches = await getMatchHistory(request.server.db, handle, query.limit, query.offset)
+    return { matches }
+  })
+
+  app.get('/players/:handle/rating-history', async (request) => {
+    const { handle } = parse(z.object({ handle: z.string().min(3).max(24) }), request.params)
+    const query = parse(
+      z.object({
+        stackId: z.string().min(1).max(32).optional(),
+        limit: z.coerce.number().int().min(1).max(500).default(100),
+      }),
+      request.query,
+    )
+    const history = await getRatingHistory(request.server.db, handle, query.stackId, query.limit)
+    return { history }
+  })
+
+  app.get('/players/:handle/stats', async (request) => {
+    const { handle } = parse(z.object({ handle: z.string().min(3).max(24) }), request.params)
+    const stats = await getPlayerStats(request.server.db, handle)
+    if (!stats) throw new AppError(ErrorCodes.NOT_FOUND, 'Player not found', 404)
+    return { stats }
   })
 
   // ---------------------------------------------------------------------------
@@ -411,6 +460,8 @@ export async function registerHttpRoutes(app: FastifyInstance) {
         windowSec: 60,
       })
 
+      requireEmailVerified(request.user as SessionUser)
+
       const input = parse(queueJoinSchema, request.body)
       const entry = await withIdempotency(request.server.db, {
         userId: request.user!.id,
@@ -504,6 +555,8 @@ export async function registerHttpRoutes(app: FastifyInstance) {
         windowSec: 60,
       })
 
+      requireEmailVerified(request.user as SessionUser)
+
       const { matchId } = parse(z.object({ matchId: z.string().uuid() }), request.params)
       const input = parse(matchSubmitSchema, request.body)
 
@@ -518,7 +571,11 @@ export async function registerHttpRoutes(app: FastifyInstance) {
       // INFRASTRUCTURE BOUNDARY: the API never evaluates submitted code itself.
       // The job carries only the submission ID; an isolated worker owns it.
       if (submission.status === 'queued') {
-        await enqueueSubmissionEvaluation(request.server.evalQueue, submission.id)
+        try {
+          await enqueueSubmissionEvaluation(request.server.evalQueue, submission.id)
+        } catch (queueErr) {
+          request.log.error({ queueErr, submissionId: submission.id }, 'enqueue_failed')
+        }
       }
 
       void reply.code(201)

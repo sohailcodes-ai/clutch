@@ -110,15 +110,9 @@ export const STACK_CATALOG = [
   { id: 'javascript', name: 'JavaScript', symbol: 'JS', judgeRuntime: 'javascript' },
   { id: 'typescript', name: 'TypeScript', symbol: 'TS', judgeRuntime: 'typescript' },
   { id: 'java', name: 'Java', symbol: 'JV', judgeRuntime: 'java' },
-  { id: 'c', name: 'C', symbol: 'C', judgeRuntime: 'c' },
   { id: 'cpp', name: 'C++', symbol: 'C+', judgeRuntime: 'cpp' },
-  { id: 'csharp', name: 'C#', symbol: 'C#', judgeRuntime: 'csharp' },
   { id: 'go', name: 'Go', symbol: 'GO', judgeRuntime: 'go' },
   { id: 'rust', name: 'Rust', symbol: 'RS', judgeRuntime: 'rust' },
-  { id: 'php', name: 'PHP', symbol: 'PHP', judgeRuntime: 'php' },
-  { id: 'kotlin', name: 'Kotlin', symbol: 'KT', judgeRuntime: 'kotlin' },
-  { id: 'swift', name: 'Swift', symbol: 'SW', judgeRuntime: 'swift' },
-  { id: 'sql', name: 'SQL', symbol: 'SQL', judgeRuntime: 'sql' },
 ] as const
 
 export type StackCatalogEntry = (typeof STACK_CATALOG)[number]

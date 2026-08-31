@@ -23,7 +23,17 @@ export type { SandboxResult } from './sandbox.js'
 export type SandboxMode = 'child_process' | 'docker'
 
 function getSandboxMode(): SandboxMode {
+  const isProduction = process.env.NODE_ENV === 'production'
   const mode = (process.env.SANDBOX_MODE ?? 'child_process').toLowerCase()
+  if (isProduction) {
+    if (mode !== 'docker') {
+      throw new Error(
+        'PRODUCTION SAFETY VIOLATION: SANDBOX_MODE must be "docker" in production. ' +
+        'child_process execution is forbidden in production environments.',
+      )
+    }
+    return 'docker'
+  }
   if (mode === 'docker') return 'docker'
   return 'child_process'
 }

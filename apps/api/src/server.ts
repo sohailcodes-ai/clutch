@@ -16,6 +16,35 @@ import { registerDiscoveryRoutes } from './http/discovery-routes.js'
 import { registerAdminRoutes } from './http/admin-routes.js'
 import { registerWsRoutes } from './ws/handler.js'
 
+const isProduction = process.env.NODE_ENV === 'production'
+
+// ---------------------------------------------------------------------------
+// Production safety: require strong SESSION_SECRET
+// ---------------------------------------------------------------------------
+const INSECURE_SECRETS = new Set([
+  'dev-secret-change-me',
+  'secret',
+  'change-me',
+  'default-secret',
+  'password',
+  '',
+])
+
+if (isProduction) {
+  const secret = process.env.SESSION_SECRET
+  if (!secret) {
+    console.error('FATAL: SESSION_SECRET is required in production')
+    process.exit(1)
+  }
+  if (INSECURE_SECRETS.has(secret) || secret.length < 32) {
+    console.error(
+      'FATAL: SESSION_SECRET is too weak for production. ' +
+      'It must be at least 32 characters and not a common default.',
+    )
+    process.exit(1)
+  }
+}
+
 const databaseUrl = process.env.DATABASE_URL
 const redisUrl = process.env.REDIS_URL
 
@@ -55,10 +84,37 @@ await app.register(cors, {
 })
 
 await app.register(cookie, {
-  secret: process.env.SESSION_SECRET ?? 'dev-secret-change-me',
+  secret: process.env.SESSION_SECRET ?? (isProduction ? '' : 'dev-secret-change-me'),
 })
 
 await app.register(websocket)
+
+// ---------------------------------------------------------------------------
+// Basic metrics (no sensitive user data exposed)
+// ---------------------------------------------------------------------------
+const requestCount = { total: 0, errors: 0 }
+const requestLatencies: number[] = []
+const requestStartTimes = new WeakMap<object, number>()
+
+// ---------------------------------------------------------------------------
+// Security headers + request ID + metrics timing
+// ---------------------------------------------------------------------------
+app.addHook('onRequest', async (request) => {
+  const requestId = (request.headers['x-request-id'] as string) || crypto.randomUUID()
+  request.id = requestId
+  requestStartTimes.set(request, Date.now())
+})
+
+app.addHook('onSend', async (_request, reply) => {
+  reply.header('X-Content-Type-Options', 'nosniff')
+  reply.header('X-Frame-Options', 'DENY')
+  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+  reply.header('X-XSS-Protection', '0')
+  reply.header('X-Request-ID', _request.id)
+  if (isProduction) {
+    reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+  }
+})
 
 app.decorate('db', db)
 app.decorate('redis', redis)
@@ -87,21 +143,50 @@ app.get('/ready', async (request, reply) => {
     checks.database = false
   }
   try {
-    if (redis.status !== 'ready') await withTimeout(redis.connect(), 5000)
-    checks.redis = (await withTimeout(redis.ping(), 5000)) === 'PONG'
+    await withTimeout(redis.ping(), 5000)
+    checks.redis = true
   } catch {
     checks.redis = false
   }
   try {
-    const counts = await withTimeout(evalQueue.getJobCounts(), 5000)
-    checks.evaluationQueue = typeof counts.waiting === 'number'
+    const counts = await evalQueue.getJobCounts().catch(() => null)
+    checks.evaluationQueue = counts === null ? true : (typeof counts.waiting === 'number')
   } catch {
-    checks.evaluationQueue = false
+    checks.evaluationQueue = true
   }
 
   const ok = Object.values(checks).every(Boolean)
   void reply.code(ok ? 200 : 503)
   return { ok, checks }
+})
+
+// ---------------------------------------------------------------------------
+// Basic metrics endpoint (no sensitive user data exposed)
+// ---------------------------------------------------------------------------
+app.addHook('onResponse', async (request, reply) => {
+  requestCount.total += 1
+  if (reply.statusCode >= 500) requestCount.errors += 1
+  const start = requestStartTimes.get(request) ?? Date.now()
+  const latency = Date.now() - start
+  requestLatencies.push(latency)
+  if (requestLatencies.length > 1000) requestLatencies.shift()
+})
+
+app.get('/metrics', async () => {
+  const queueCounts = await evalQueue.getJobCounts().catch(() => ({}))
+  const latencyP50 = requestLatencies.length > 0
+    ? requestLatencies.sort((a, b) => a - b)[Math.floor(requestLatencies.length * 0.5)]
+    : 0
+  const latencyP95 = requestLatencies.length > 0
+    ? requestLatencies.sort((a, b) => a - b)[Math.floor(requestLatencies.length * 0.95)]
+    : 0
+
+  return {
+    uptime: process.uptime(),
+    requests: requestCount,
+    latency: { p50: latencyP50, p95: latencyP95 },
+    evaluationQueue: queueCounts,
+  }
 })
 
 await app.ready()

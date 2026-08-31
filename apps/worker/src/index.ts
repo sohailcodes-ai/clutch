@@ -15,6 +15,7 @@ import {
   shouldEvaluateMatch,
   tryPairQueue,
   completeRoomIfFinished,
+  checkAndRolloverSeason,
 } from '@clutch/domain'
 
 /**
@@ -40,6 +41,7 @@ const redis = new Redis(redisUrl)
 
 const SWEEP_INTERVAL_MS = 15_000
 const PAIRING_INTERVAL_MS = 2_000
+const SEASON_CHECK_INTERVAL_MS = 60_000
 
 /**
  * Matchmaking loop: continuously attempts to pair waiting entries for every
@@ -62,6 +64,22 @@ async function sweepMatchmaking() {
         console.error({ err, seasonId: season.id, stackId: stack.id }, 'pairing_failed')
       }
     }
+  }
+}
+
+/**
+ * Season lifecycle sweep: detect expired seasons and perform rollover.
+ * The rollover operation is idempotent — concurrent calls are safe because
+ * rolloverSeason uses a transactional compare-and-swap on the season status.
+ */
+async function sweepSeasonLifecycle() {
+  try {
+    const newSeason = await checkAndRolloverSeason(db)
+    if (newSeason) {
+      console.log({ newSeasonId: newSeason.id, newSeasonNumber: newSeason.number }, 'season_rollover_completed')
+    }
+  } catch (err) {
+    console.error({ err }, 'season_rollover_failed')
   }
 }
 
@@ -200,9 +218,16 @@ const pairingTimer = setInterval(() => {
   })
 }, PAIRING_INTERVAL_MS)
 
+const seasonTimer = setInterval(() => {
+  sweepSeasonLifecycle().catch((err) => {
+    console.error({ err }, 'season_lifecycle_sweep_failed')
+  })
+}, SEASON_CHECK_INTERVAL_MS)
+
 async function shutdown() {
   clearInterval(sweepTimer)
   clearInterval(pairingTimer)
+  clearInterval(seasonTimer)
   console.log('worker_shutting_down')
   await worker.close()
   redis.disconnect()
@@ -212,4 +237,10 @@ async function shutdown() {
 process.on('SIGINT', () => void shutdown())
 process.on('SIGTERM', () => void shutdown())
 
-console.log('evaluation_worker_started', { queue: EVALUATION_QUEUE_NAME })
+console.log('evaluation_worker_started', {
+  queue: EVALUATION_QUEUE_NAME,
+  sweepIntervalMs: SWEEP_INTERVAL_MS,
+  pairingIntervalMs: PAIRING_INTERVAL_MS,
+  seasonCheckIntervalMs: SEASON_CHECK_INTERVAL_MS,
+  evalConcurrency: Number(process.env.EVALUATION_CONCURRENCY ?? 2),
+})

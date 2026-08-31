@@ -1,5 +1,6 @@
 export * from './auth/service.js'
 export * from './profile/service.js'
+export * from './profile/history.js'
 export * from './rating/elo.js'
 export * from './rating/placement.js'
 export * from './audit.js'

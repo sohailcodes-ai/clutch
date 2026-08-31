@@ -111,7 +111,7 @@ export async function joinQueue(
 
   const key = queueKey(season.id, input.stackId)
   await redis.zadd(key, score, entry.id)
-  await redis.hset(queueMetaKey(entry.id), {
+  await redis.hmset(queueMetaKey(entry.id), {
     userId: input.userId,
     rating: String(ratingRow.rating),
     bucket: String(bucket),

@@ -1,0 +1,44 @@
+FROM node:22-alpine AS base
+RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/web/package.json apps/web/
+RUN pnpm install --frozen-lockfile --filter @clutch/shared... --filter @clutch/web...
+
+FROM base AS builder
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ARG NEXT_PUBLIC_WS_URL=ws://localhost:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY tsconfig.base.json ./
+COPY packages/shared/tsconfig.json packages/shared/
+COPY packages/shared/src packages/shared/src
+COPY apps/web/tsconfig.json apps/web/
+COPY apps/web/next.config.mjs apps/web/
+COPY apps/web/postcss.config.mjs apps/web/
+COPY apps/web/package.json apps/web/
+COPY apps/web/public apps/web/public
+COPY apps/web/app apps/web/app
+COPY apps/web/components apps/web/components
+COPY apps/web/lib apps/web/lib
+COPY apps/web/styles apps/web/styles
+RUN pnpm --filter @clutch/shared build && pnpm --filter @clutch/web build
+
+FROM node:22-alpine AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
+COPY --from=builder /app/apps/web/next.config.mjs ./apps/web/
+EXPOSE 3000
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:3000/ || exit 1
+CMD ["node", "apps/web/server.js"]

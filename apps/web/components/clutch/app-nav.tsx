@@ -11,8 +11,6 @@ const LINKS = [
   { href: '/explore', label: 'Explore' },
   { href: '/leaderboard', label: 'Ladder' },
   { href: '/rooms', label: 'Rooms' },
-  { href: '/events', label: 'Events' },
-  { href: '/tournaments', label: 'Tournaments' },
   { href: '/titles', label: 'Titles' },
 ]
 

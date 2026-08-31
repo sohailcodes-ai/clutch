@@ -329,7 +329,10 @@ export const matches = pgTable('matches', {
     onDelete: 'set null',
   }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (table) => [
+  index('idx_matches_status_created').on(table.status, table.createdAt),
+  index('idx_matches_status_ends').on(table.status, table.endsAt),
+])
 
 export const matchParticipants = pgTable(
   'match_participants',
@@ -352,6 +355,7 @@ export const matchParticipants = pgTable(
   (table) => [
     unique().on(table.matchId, table.userId),
     unique().on(table.matchId, table.slot),
+    index('idx_match_participants_user_created').on(table.userId, table.joinedAt),
   ],
 )
 
@@ -410,7 +414,7 @@ export const submissions = pgTable(
     idempotencyKey: text('idempotency_key').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [unique().on(table.matchId, table.userId, table.idempotencyKey)],
+  (table) => [unique().on(table.matchId, table.userId, table.idempotencyKey), index('idx_submissions_match_user_created').on(table.matchId, table.userId, table.createdAt)],
 )
 
 export const submissionRuns = pgTable('submission_runs', {
@@ -450,7 +454,7 @@ export const ratingLedger = pgTable('rating_ledger', {
   expectedScore: numeric('expected_score', { precision: 6, scale: 4 }).notNull(),
   actualScore: numeric('actual_score', { precision: 3, scale: 2 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (table) => [index('idx_rating_ledger_user_created').on(table.userId, table.createdAt)])
 
 export const matchEvents = pgTable(
   'match_events',

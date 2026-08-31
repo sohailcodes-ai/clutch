@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:4000/ws'
+const RECONNECT_BASE_MS = 1000
+const RECONNECT_MAX_MS = 8000
+
+export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
 
 type WsMessage = {
   type: string
@@ -22,19 +26,25 @@ type WsOptions = {
 
 export function useWs(opts: WsOptions = {}) {
   const wsRef = useRef<WebSocket | null>(null)
-  const [connected, setConnected] = useState(false)
+  const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectAttempts = useRef(0)
   const onMessageRef = useRef<WsOptions['onMessage']>(opts.onMessage)
   onMessageRef.current = opts.onMessage
+  const mountedRef = useRef(true)
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
+    if (!mountedRef.current) return
+
+    setStatus((prev) => (prev === 'connected' ? 'reconnecting' : prev === 'connecting' ? 'connecting' : 'reconnecting'))
 
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
 
     ws.onopen = () => {
-      setConnected(true)
+      reconnectAttempts.current = 0
+      setStatus('connected')
     }
 
     ws.onmessage = (ev) => {
@@ -47,10 +57,17 @@ export function useWs(opts: WsOptions = {}) {
     }
 
     ws.onclose = () => {
-      setConnected(false)
-      // Reconnect after 2s
+      setStatus('reconnecting')
+      // Exponential backoff reconnect
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
-      reconnectTimer.current = setTimeout(() => connect(), 2000)
+      const delay = Math.min(
+        RECONNECT_BASE_MS * Math.pow(1.5, reconnectAttempts.current),
+        RECONNECT_MAX_MS,
+      )
+      reconnectAttempts.current += 1
+      reconnectTimer.current = setTimeout(() => {
+        if (mountedRef.current) connect()
+      }, delay)
     }
 
     ws.onerror = () => {
@@ -59,8 +76,10 @@ export function useWs(opts: WsOptions = {}) {
   }, [])
 
   useEffect(() => {
+    mountedRef.current = true
     if (opts.autoConnect !== false) connect()
     return () => {
+      mountedRef.current = false
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
       wsRef.current?.close()
     }
@@ -79,5 +98,8 @@ export function useWs(opts: WsOptions = {}) {
     [send],
   )
 
-  return { connected, send, subscribe, reconnect: connect }
+  // Backwards-compatible `connected` boolean
+  const connected = status === 'connected'
+
+  return { connected, status, send, subscribe, reconnect: connect }
 }

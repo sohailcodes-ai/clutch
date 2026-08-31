@@ -1,0 +1,48 @@
+FROM node:22-alpine AS base
+RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/db/package.json packages/db/
+COPY packages/domain/package.json packages/domain/
+COPY apps/worker/package.json apps/worker/
+RUN pnpm install --frozen-lockfile --filter @clutch/shared... --filter @clutch/db... --filter @clutch/domain... --filter @clutch/worker...
+
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
+COPY --from=deps /app/packages/domain/node_modules ./packages/domain/node_modules
+COPY --from=deps /app/apps/worker/node_modules ./apps/worker/node_modules
+COPY tsconfig.base.json ./
+COPY packages/shared/tsconfig.json packages/shared/
+COPY packages/shared/src packages/shared/src
+COPY packages/db/tsconfig.json packages/db/
+COPY packages/db/src packages/db/src
+COPY packages/domain/tsconfig.json packages/domain/
+COPY packages/domain/src packages/domain/src
+COPY apps/worker/tsconfig.json apps/worker/
+COPY apps/worker/src apps/worker/src
+RUN pnpm --filter @clutch/shared build && pnpm --filter @clutch/db build && pnpm --filter @clutch/domain build && pnpm --filter @clutch/worker build
+
+FROM node:22-alpine AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+COPY --from=builder /app/packages/db/dist ./packages/db/dist
+COPY --from=builder /app/packages/db/package.json ./packages/db/
+COPY --from=builder /app/packages/domain/dist ./packages/domain/dist
+COPY --from=builder /app/packages/domain/package.json ./packages/domain/
+COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
+COPY --from=builder /app/apps/worker/package.json ./apps/worker/
+COPY --from=builder /app/pnpm-lock.yaml ./
+COPY packages/shared/src/drizzle ./packages/shared/src/drizzle
+COPY packages/db/drizzle ./packages/db/drizzle
+RUN pnpm install --frozen-lockfile --prod --filter @clutch/worker...
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "process.exit(0)" || exit 1
+CMD ["node", "apps/worker/dist/index.js"]

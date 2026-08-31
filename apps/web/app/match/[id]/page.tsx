@@ -4,12 +4,18 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, ApiError, type RunResultDto } from '@/lib/api'
 import { useSession } from '@/lib/session'
-import { useWs } from '@/lib/ws'
+import { useWs, type ConnectionStatus } from '@/lib/ws'
 import AppNav from '@/components/clutch/app-nav'
 import SubmissionStateChip, { type SubmissionState } from '@/components/clutch/submission-state'
+import ConnectionIndicator from '@/components/clutch/connection-indicator'
+import MatchSkeleton from '@/components/clutch/match-skeleton'
 import ClutchLogo from '@/components/brand/clutch-logo'
-import { ErrorState, Loading, Panel, SectionTitle } from '@/components/clutch/states'
+import { ErrorState, Panel, SectionTitle } from '@/components/clutch/states'
 import { cn } from '@/lib/utils'
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 type Participant = {
   userId: string
@@ -31,6 +37,7 @@ type MatchSnapshot = {
   startedAt: string | null
   endsAt: string | null
   winnerUserId: string | null
+  resolveReason?: string | null
   opponent?: { handle: string | null; avatarUrl: string | null; ratingBefore: number } | null
   questionVersion: {
     id: string
@@ -49,7 +56,6 @@ type MatchSnapshot = {
     createdAt: string
   }[]
   participants: Participant[]
-  /** Server-authoritative placement context for the viewer. */
   viewerCompetitive?: {
     competitiveStatus: 'unranked' | 'ranked'
     placementMatchesRequired: number
@@ -57,6 +63,43 @@ type MatchSnapshot = {
     placementRemaining: number
   } | null
 }
+
+/** All WS event types that should trigger a match snapshot refresh. */
+const MATCH_EVENTS = new Set([
+  'match.found',
+  'match.starting',
+  'match.active',
+  'match.participant_update',
+  'submission.queued',
+  'match.evaluating',
+  'submission.result',
+  'match.resolved',
+  'match.adjudicated',
+  'match.snapshot',
+  'admin.joined',
+  'admin.left',
+])
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Safe, user-facing error messages keyed by API error code or message pattern. */
+function friendlyError(err: unknown): string {
+  if (!(err instanceof ApiError)) return 'Something went wrong. Please try again.'
+  const msg = err.message.toLowerCase()
+  if (err.status === 401 || err.status === 403) return 'Your session has expired. Please sign in again.'
+  if (err.status === 404) return 'This match is no longer available.'
+  if (err.status === 409) return 'Match state has changed. Refreshing…'
+  if (msg.includes('network') || msg.includes('fetch')) return 'Connection lost. Trying to reconnect…'
+  if (msg.includes('submission') || msg.includes('code')) return 'Submission could not be evaluated. Try again.'
+  if (msg.includes('not active')) return 'This match is no longer active.'
+  return err.message || 'Something went wrong. Please try again.'
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
 function Timer({ endsAt, now }: { endsAt: string | null; now: number }) {
   const remaining = useMemo(() => {
@@ -89,11 +132,13 @@ function PlayerIdentity({
   avatarUrl,
   rating,
   align = 'left',
+  showYou = false,
 }: {
   handle: string | null
   avatarUrl: string | null
   rating?: number | null
   align?: 'left' | 'right'
+  showYou?: boolean
 }) {
   return (
     <div className={cn('flex min-w-0 items-center gap-3', align === 'right' && 'flex-row-reverse')}>
@@ -106,7 +151,12 @@ function PlayerIdentity({
         </span>
       )}
       <div className={cn('min-w-0', align === 'right' && 'text-right')}>
-        <p className="truncate font-mono text-sm font-bold">@{handle ?? '?'}</p>
+        <p className="truncate font-mono text-sm font-bold">
+          @{handle ?? '?'}
+          {showYou ? (
+            <span className="label-mono ml-1.5 text-[0.55rem] normal-case text-muted-foreground">(you)</span>
+          ) : null}
+        </p>
         {rating !== undefined && rating !== null ? (
           <p className="label-mono text-[0.55rem] uppercase text-muted-foreground">{rating} rating</p>
         ) : null}
@@ -115,18 +165,43 @@ function PlayerIdentity({
   )
 }
 
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
+
 export default function MatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { user } = useSession()
+
+  // Server-authoritative match snapshot
   const [match, setMatch] = useState<MatchSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [code, setCode] = useState('')
-  const [now, setNow] = useState(() => Date.now())
-  const [busy, setBusy] = useState(false)
-  const [submitMsg, setSubmitMsg] = useState<string | null>(null)
-  const [runResult, setRunResult] = useState<RunResultDto | null>(null)
-  const [runBusy, setRunBusy] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
 
+  // Editor state
+  const [code, setCode] = useState('')
+  const codeRef = useRef('')
+  codeRef.current = code
+
+  // Timer
+  const [now, setNow] = useState(() => Date.now())
+
+  // Ready state
+  const [readyBusy, setReadyBusy] = useState(false)
+  const [readyConfirmed, setReadyConfirmed] = useState(false)
+
+  // Submission / run state
+  const [submitBusy, setSubmitBusy] = useState(false)
+  const [runBusy, setRunBusy] = useState(false)
+  const [runResult, setRunResult] = useState<RunResultDto | null>(null)
+  const [submitMsg, setSubmitMsg] = useState<string | null>(null)
+
+  // Forfeit state
+  const [forfeitBusy, setForfeitBusy] = useState(false)
+  const [showForfeitConfirm, setShowForfeitConfirm] = useState(false)
+
+  // ---- Load match snapshot from API ----
   const load = useCallback(async () => {
     try {
       const res = await api.get<{ match: MatchSnapshot }>(`/matches/${id}`)
@@ -136,8 +211,15 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         const starters = res.match.questionVersion.starterCode
         return starters[res.match.stackId] ?? Object.values(starters)[0] ?? ''
       })
+      // If the match is already starting/active when we load, the viewer has
+      // already readied (e.g. after a page refresh during ready phase).
+      // We cannot assume this from local state — the server decides.
+      // The readyConfirmed flag is set by the ready() function, not by load.
+      setError(null)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Match not found')
+      setError(friendlyError(err))
+    } finally {
+      setInitialLoading(false)
     }
   }, [id])
 
@@ -145,115 +227,164 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
   const loadRef = useRef(load)
   loadRef.current = load
 
-  // Timer tick for countdown (1s, independent of WS).
+  // Timer tick (1s, independent of WS).
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [])
 
-  // Subscribe to match WebSocket events and refresh on any match event.
-  const MATCH_EVENTS = useMemo(
-    () =>
-      new Set([
-        'match.found',
-        'match.starting',
-        'match.active',
-        'match.participant_update',
-        'submission.queued',
-        'match.evaluating',
-        'submission.result',
-        'match.resolved',
-        'match.adjudicated',
-        'match.snapshot',
-        'admin.joined',
-        'admin.left',
-      ]),
-    [],
-  )
+  // ---- WebSocket ----
+  const lastEventIdRef = useRef<number | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting')
 
-  const { connected, subscribe } = useWs({
+  const { status: wsStatus, subscribe } = useWs({
     onMessage: useCallback(
-      (msg: { type?: string; matchId?: string }) => {
+      (msg: { type?: string; matchId?: string; id?: string }) => {
         if (msg.type && MATCH_EVENTS.has(msg.type) && msg.matchId === id) {
           void loadRef.current()
         }
+        // Track last event ID for resync
+        if (msg.id) {
+          const num = parseInt(msg.id.replace(/^evt-/, ''), 10)
+          if (!isNaN(num)) lastEventIdRef.current = num
+        }
       },
-      [id, MATCH_EVENTS],
+      [id],
     ),
   })
 
-  // Subscribe to match channel once connected.
+  // Sync connection status
   useEffect(() => {
-    if (connected) {
+    setConnectionStatus(wsStatus)
+  }, [wsStatus])
+
+  // Subscribe + resync on connect/reconnect
+  useEffect(() => {
+    if (wsStatus === 'connected') {
       subscribe('match.subscribe', { matchId: id })
     }
-  }, [connected, subscribe, id])
+  }, [wsStatus, subscribe, id])
 
-  // Initial load.
-  useEffect(() => { void load() }, [load])
+  // ---- Initial load ----
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  // ---- Actions ----
 
   async function ready() {
-    setBusy(true)
+    if (readyBusy || readyConfirmed) return
+    setReadyBusy(true)
+    setError(null)
     try {
       await api.post(`/matches/${id}/ready`)
+      setReadyConfirmed(true)
       await load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not ready up')
+      setError(friendlyError(err))
     } finally {
-      setBusy(false)
+      setReadyBusy(false)
     }
   }
 
   async function testRun() {
+    if (runBusy) return
     setRunBusy(true)
     setRunResult(null)
     setSubmitMsg(null)
+    setError(null)
     try {
       const res = await api.post<RunResultDto>(`/matches/${id}/run`, {
-        sourceCode: code,
+        sourceCode: codeRef.current,
         stdin: '',
         stackId: match?.stackId ?? '',
       })
       setRunResult(res)
       await load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Run failed')
+      setError(friendlyError(err))
     } finally {
       setRunBusy(false)
     }
   }
 
   async function submitFinal() {
-    setBusy(true)
+    if (submitBusy) return
+    setSubmitBusy(true)
     setSubmitMsg(null)
     setRunResult(null)
+    setError(null)
     try {
       await api.post(`/matches/${id}/submissions`, {
-        sourceCode: code,
+        sourceCode: codeRef.current,
         isFinal: true,
         idempotencyKey: crypto.randomUUID(),
       })
       setSubmitMsg('Final submission queued for evaluation.')
       await load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Submission failed')
+      setError(friendlyError(err))
     } finally {
-      setBusy(false)
+      setSubmitBusy(false)
     }
   }
 
-  if (error && !match) return <ErrorState message={error} onRetry={() => void load()} />
-  if (!match) return <Loading label="Entering arena" />
+  async function forfeit() {
+    if (forfeitBusy) return
+    setForfeitBusy(true)
+    setShowForfeitConfirm(false)
+    setError(null)
+    try {
+      await api.post(`/matches/${id}/forfeit`)
+      await load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setForfeitBusy(false)
+    }
+  }
 
-  const { user } = useSession()
+  // ---- Derived state ----
   const viewerId = user?.id ?? ''
-  const viewer = match.participants.find((p) => p.userId === viewerId)
-  const opponentParticipant = match.participants.find((p) => p.userId !== viewerId)
+  const viewer = match?.participants.find((p) => p.userId === viewerId)
+  const opponentParticipant = match?.participants.find((p) => p.userId !== viewerId)
+  const latest = match?.submissions[match.submissions.length - 1]
+  const isResult = match
+    ? ['resolved', 'draw', 'abandoned', 'cancelled'].includes(match.status)
+    : false
+  const isLobby = match ? ['matched', 'starting'].includes(match.status) : false
+  const isActive = match ? ['active', 'evaluating'].includes(match.status) : false
+  const isEvaluating = match?.status === 'evaluating'
+  const isFinished = match?.status === 'resolved' || match?.status === 'draw'
 
-  // ---------------------------------------------------------------
-  // RESULT SCREEN — server-authoritative numbers only.
-  // ---------------------------------------------------------------
-  if (['resolved', 'draw', 'abandoned', 'cancelled'].includes(match.status)) {
+  // ---- Render: initial loading ----
+  if (initialLoading && !match && !error) {
+    return (
+      <>
+        <AppNav />
+        <MatchSkeleton />
+      </>
+    )
+  }
+
+  // ---- Render: error with no match ----
+  if (error && !match) {
+    return (
+      <>
+        <AppNav />
+        <main className="mx-auto max-w-[720px] px-4 py-12">
+          <ErrorState message={error} onRetry={() => { setError(null); setInitialLoading(true); void load() }} />
+        </main>
+      </>
+    )
+  }
+
+  if (!match) return null
+
+  // ============================================================
+  // RESULT SCREEN (resolved | draw | abandoned | cancelled)
+  // ============================================================
+  if (isResult) {
     const myResult =
       viewer?.result === 'win' || viewer?.result === 'loss' || viewer?.result === 'draw'
         ? viewer.result
@@ -266,14 +397,9 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       viewer?.ratingAfter !== null && viewer?.ratingAfter !== undefined && viewer
         ? viewer.ratingAfter - viewer.ratingBefore
         : null
-    // Placement context comes from the server snapshot — never guessed.
     const inPlacement = match.viewerCompetitive?.competitiveStatus === 'unranked'
-    const placementDone = match.viewerCompetitive
-      ? match.viewerCompetitive.placementMatchesCompleted
-      : 0
-    const placementTotal = match.viewerCompetitive
-      ? match.viewerCompetitive.placementMatchesRequired
-      : 0
+    const placementDone = match.viewerCompetitive?.placementMatchesCompleted ?? 0
+    const placementTotal = match.viewerCompetitive?.placementMatchesRequired ?? 0
     const placementLeft = match.viewerCompetitive?.placementRemaining ?? 0
 
     return (
@@ -282,11 +408,13 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         <main className="mx-auto max-w-[720px] space-y-6 px-4 py-12">
           <div className="border border-border bg-card/40 p-8 text-center sm:p-12">
             <ClutchLogo size={22} label="" className="mx-auto mb-6 text-primary/70" />
+
             {inPlacement ? (
               <p className="label-mono mb-4 border border-warning/50 px-3 py-1 inline-block text-[0.62rem] font-black uppercase text-warning">
                 Placement match {placementDone} / {placementTotal}
               </p>
             ) : null}
+
             <h1
               className={cn(
                 'text-display text-5xl sm:text-7xl',
@@ -296,6 +424,8 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
                     ? 'text-defeat'
                     : 'text-foreground',
               )}
+              role="heading"
+              aria-level={1}
             >
               {headline}
             </h1>
@@ -306,6 +436,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
                   'data-mono mt-4 text-2xl font-black',
                   delta > 0 ? 'text-victory' : 'text-defeat',
                 )}
+                aria-label={`Rating change: ${delta > 0 ? 'plus' : 'minus'} ${Math.abs(delta)}`}
               >
                 {delta > 0 ? '+' : ''}
                 {delta} Rating
@@ -328,6 +459,12 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
               </p>
             ) : null}
 
+            {match.resolveReason === 'forfeit' ? (
+              <p className="label-mono mt-3 text-[0.62rem] uppercase text-warning">
+                Result determined by forfeit
+              </p>
+            ) : null}
+
             <div className="mx-auto mt-8 grid max-w-sm grid-cols-3 gap-px border border-border bg-border">
               <div className="bg-background p-3">
                 <p className="label-mono text-[0.55rem] text-muted-foreground">You</p>
@@ -343,27 +480,43 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
               </div>
             </div>
 
-            <button
-              onClick={() => router.push('/home')}
-              autoFocus
-              className="label-mono mt-10 border border-border-strong bg-primary px-8 py-3 text-[0.7rem] font-bold uppercase text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              Back to arena
-            </button>
+            <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+              <button
+                onClick={() => router.push('/home')}
+                autoFocus
+                className="label-mono border border-border-strong bg-primary px-8 py-3 text-[0.7rem] font-bold uppercase text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                Play Again
+              </button>
+              <button
+                onClick={() => router.push(`/profile/${viewer?.handle ?? ''}`)}
+                className="label-mono border border-border-strong px-8 py-3 text-[0.7rem] font-bold uppercase text-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                View Profile
+              </button>
+            </div>
           </div>
         </main>
       </>
     )
   }
 
-  // ---------------------------------------------------------------
+  // ============================================================
   // LOBBY / VS SCREEN (matched | starting)
-  // ---------------------------------------------------------------
-  if (match.status === 'matched' || match.status === 'starting') {
+  // ============================================================
+  if (isLobby) {
+    const isStarting = match.status === 'starting'
+    const readyWindowSec = 30
+
     return (
       <>
         <AppNav />
-        <main className="mx-auto max-w-[900px] px-4 py-12">
+        <main className="mx-auto max-w-[900px] space-y-4 px-4 py-8 sm:py-12">
+          {/* Connection indicator */}
+          <div className="flex justify-end">
+            <ConnectionIndicator status={connectionStatus} />
+          </div>
+
           <Panel className="border-primary/40 p-8 sm:p-12">
             <SectionTitle>
               {match.viewerCompetitive?.competitiveStatus === 'unranked'
@@ -382,6 +535,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
                       ? viewer?.ratingBefore
                       : null
                   }
+                  showYou
                 />
                 {match.viewerCompetitive?.competitiveStatus === 'unranked' ? (
                   <p className="label-mono mt-1 border border-warning/50 px-1.5 py-0.5 inline-block text-[0.55rem] font-black uppercase text-warning">
@@ -392,52 +546,73 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
               </div>
               <div className="text-center">
                 <p className="text-display text-3xl text-primary sm:text-5xl">VS</p>
-                <p className="label-mono mt-2 animate-pulse text-[0.55rem] uppercase text-muted-foreground">
+                <p className="label-mono mt-2 text-[0.55rem] uppercase text-muted-foreground">
                   {match.stackId} · {match.difficultyId}
                 </p>
               </div>
               <PlayerIdentity
                 handle={match.opponent?.handle ?? opponentParticipant?.handle ?? null}
-                avatarUrl={
-                  match.opponent?.avatarUrl ?? opponentParticipant?.avatarUrl ?? null
-                }
+                avatarUrl={match.opponent?.avatarUrl ?? opponentParticipant?.avatarUrl ?? null}
                 rating={match.opponent?.ratingBefore ?? opponentParticipant?.ratingBefore}
                 align="right"
               />
             </div>
 
-            <button
-              onClick={() => void ready()}
-              disabled={busy}
-              autoFocus
-              className="label-mono mx-auto flex w-full max-w-xs items-center justify-center border border-border-strong bg-primary py-4 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {busy ? 'Locking in…' : 'Ready up'}
-            </button>
-            <p className="label-mono mt-4 text-center text-[0.58rem] text-muted-foreground">
-              The duel starts when both players are locked in.
-            </p>
+            {/* Status message */}
+            {isStarting ? (
+              <p className="label-mono mb-4 text-center text-[0.62rem] uppercase text-warning animate-pulse">
+                Opponent is ready — {readyWindowSec}s window to lock in
+              </p>
+            ) : (
+              <p className="label-mono mb-4 text-center text-[0.58rem] text-muted-foreground">
+                The duel starts when both players are locked in.
+              </p>
+            )}
+
+            {/* Ready button */}
+            {readyConfirmed ? (
+              <div className="mx-auto flex w-full max-w-xs items-center justify-center border border-victory/40 bg-victory/5 py-4">
+                <p className="label-mono text-[0.65rem] uppercase text-victory">
+                  ✓ Locked in — waiting for opponent
+                </p>
+              </div>
+            ) : (
+              <button
+                onClick={() => void ready()}
+                disabled={readyBusy}
+                autoFocus
+                aria-label="Ready up for the match"
+                className="label-mono mx-auto flex w-full max-w-xs items-center justify-center border border-border-strong bg-primary py-4 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {readyBusy ? 'Locking in…' : 'Ready up'}
+              </button>
+            )}
+
+            {error ? (
+              <p className="label-mono mt-4 text-center text-[0.62rem] text-defeat" role="alert">
+                {error}
+              </p>
+            ) : null}
           </Panel>
         </main>
       </>
     )
   }
 
-  // ---------------------------------------------------------------
+  // ============================================================
   // ACTIVE DUEL (active | evaluating)
-  // ---------------------------------------------------------------
-  const latest = match.submissions[match.submissions.length - 1]
-
+  // ============================================================
   return (
     <>
       <AppNav />
-      <main className="mx-auto max-w-[1400px] space-y-4 px-4 py-6">
+      <main className="mx-auto max-w-[1400px] space-y-4 px-4 py-4 sm:py-6">
         {/* Competitive header */}
         <Panel className="flex flex-wrap items-center justify-between gap-4 py-4">
-          <div className="flex min-w-0 items-center gap-4">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <PlayerIdentity
               handle={viewer?.handle ?? null}
               avatarUrl={viewer?.avatarUrl ?? null}
+              showYou
             />
             <span className="text-display shrink-0 text-lg text-muted-foreground/60">VS</span>
             <PlayerIdentity
@@ -446,23 +621,35 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
               align="right"
             />
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
             <div className="text-right">
               <p className="label-mono text-[0.55rem] uppercase text-muted-foreground">
                 {match.publicId} · {match.stackId} · {match.difficultyId}
               </p>
-              {latest ? (
-                <div className="mt-1 flex justify-end">
-                  <SubmissionStateChip state={latest.status} />
-                </div>
-              ) : null}
+              <div className="mt-1 flex items-center justify-end gap-2">
+                {latest ? <SubmissionStateChip state={latest.status} /> : null}
+                <ConnectionIndicator status={connectionStatus} />
+              </div>
             </div>
             <Timer endsAt={match.endsAt} now={now} />
           </div>
         </Panel>
 
+        {/* Evaluating banner */}
+        {isEvaluating ? (
+          <div
+            className="border border-warning/40 bg-warning/5 px-4 py-2 text-center"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="label-mono animate-pulse text-[0.62rem] uppercase text-warning">
+              Evaluating final submissions — results incoming…
+            </p>
+          </div>
+        ) : null}
+
         <div className="grid gap-4 lg:grid-cols-[minmax(320px,0.9fr)_1.1fr]">
-          {/* Problem */}
+          {/* Problem panel */}
           <Panel className="max-h-[72vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
               <h2 className="font-mono text-sm font-bold">
@@ -502,33 +689,59 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
               onChange={(e) => setCode(e.target.value)}
               spellCheck={false}
               aria-label="Code editor"
+              placeholder="Write your solution here…"
               className="h-[48vh] w-full resize-none border border-border bg-background p-4 font-mono text-xs leading-relaxed outline-none focus:border-primary lg:h-[54vh]"
             />
 
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => void testRun()}
-                disabled={runBusy || match.status !== 'active'}
+                disabled={runBusy || !isActive}
+                aria-label="Test run your code against public test cases"
                 className="label-mono border border-border-strong px-5 py-2.5 text-[0.65rem] uppercase transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
               >
                 {runBusy ? 'Running…' : 'Test run'}
               </button>
               <button
                 onClick={() => void submitFinal()}
-                disabled={busy || match.status !== 'active'}
+                disabled={submitBusy || !isActive}
+                aria-label="Submit your final solution"
                 className="label-mono border border-border-strong bg-primary px-6 py-2.5 text-[0.65rem] font-bold uppercase text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
               >
-                {busy ? 'Locking in…' : 'Final submit'}
+                {submitBusy ? 'Submitting…' : 'Final submit'}
               </button>
-              {match.status === 'evaluating' ? (
-                <span className="label-mono animate-pulse text-[0.62rem] uppercase text-warning">
-                  Evaluating final submissions…
-                </span>
-              ) : null}
+              <button
+                onClick={() => setShowForfeitConfirm(true)}
+                disabled={forfeitBusy || !isActive}
+                aria-label="Forfeit this match"
+                className="label-mono border border-border px-4 py-2.5 text-[0.65rem] uppercase text-muted-foreground transition-colors hover:border-defeat hover:text-defeat disabled:opacity-40"
+              >
+                Forfeit
+              </button>
               {submitMsg ? (
-                <span className="label-mono text-[0.6rem] text-signal">{submitMsg}</span>
+                <span className="label-mono text-[0.6rem] text-signal" role="status">{submitMsg}</span>
               ) : null}
             </div>
+
+            {/* Forfeit confirmation dialog */}
+            {showForfeitConfirm ? (
+              <div className="flex items-center gap-3 border border-defeat/40 bg-defeat/5 px-4 py-3" role="alertdialog" aria-label="Confirm forfeit">
+                <p className="label-mono text-[0.62rem] text-defeat">Forfeit? Your opponent will win by default.</p>
+                <button
+                  onClick={() => void forfeit()}
+                  disabled={forfeitBusy}
+                  className="label-mono border border-defeat px-3 py-1 text-[0.6rem] uppercase text-defeat transition-colors hover:bg-defeat/10 disabled:opacity-50"
+                >
+                  {forfeitBusy ? 'Forfeiting…' : 'Yes, forfeit'}
+                </button>
+                <button
+                  onClick={() => setShowForfeitConfirm(false)}
+                  className="label-mono border border-border px-3 py-1 text-[0.6rem] uppercase text-muted-foreground transition-colors hover:border-foreground"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : null}
 
             {/* Run output panel */}
             {runResult ? (
@@ -536,10 +749,12 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
                 <div className="flex items-center justify-between border-b border-border pb-2">
                   <SectionTitle>Output</SectionTitle>
                   <div className="flex items-center gap-3">
-                    <span className={cn(
-                      'label-mono text-[0.58rem] uppercase',
-                      runResult.status === 'accepted' ? 'text-signal' : 'text-defeat',
-                    )}>
+                    <span
+                      className={cn(
+                        'label-mono text-[0.58rem] uppercase',
+                        runResult.status === 'accepted' ? 'text-signal' : 'text-defeat',
+                      )}
+                    >
                       {runResult.status.replace(/_/g, ' ')}
                     </span>
                     <span className="label-mono text-[0.55rem] text-muted-foreground">
@@ -577,22 +792,27 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
               </Panel>
             ) : null}
 
+            {/* Submission history */}
             <Panel>
               <SectionTitle>Submissions</SectionTitle>
               {match.submissions.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Nothing submitted yet. Use “Test run” to sanity-check, then “Final submit” to lock
+                  Nothing submitted yet. Use &quot;Test run&quot; to sanity-check, then &quot;Final submit&quot; to lock
                   your solution.
                 </p>
               ) : (
-                <ul className="space-y-1.5">
+                <ul className="space-y-1.5" aria-label="Submission history">
                   {[...match.submissions].reverse().map((s) => (
                     <li key={s.id} className="flex items-center justify-between gap-3">
-                      <SubmissionStateChip state={s.status} />
+                      <div className="flex items-center gap-2">
+                        <SubmissionStateChip state={s.status} />
+                        {s.isFinal ? (
+                          <span className="label-mono text-[0.55rem] uppercase text-primary font-bold">final</span>
+                        ) : null}
+                      </div>
                       <span className="data-mono text-[0.65rem] text-muted-foreground">
                         {s.passedCount}/{s.totalCount} tests ·{' '}
                         {new Date(s.createdAt).toLocaleTimeString()}
-                        {!s.isFinal ? ' · test' : ' · final'}
                       </span>
                     </li>
                   ))}
@@ -600,7 +820,11 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
               )}
             </Panel>
 
-            {error ? <ErrorState message={error} /> : null}
+            {error ? (
+              <div className="border border-defeat/40 bg-defeat/5 px-4 py-3" role="alert">
+                <p className="label-mono text-[0.62rem] text-defeat">{error}</p>
+              </div>
+            ) : null}
           </div>
         </div>
       </main>

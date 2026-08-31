@@ -3,6 +3,20 @@ import type { Database } from '@clutch/db'
 import { schema } from '@clutch/db'
 import { DEFAULT_RATING, PLACEMENT_MATCHES, SEASON_SOFT_RESET_FACTOR } from '@clutch/shared'
 
+/**
+ * Check if any active season has expired (past its endsAt date).
+ * Returns the expired season if found, null otherwise.
+ */
+export async function findExpiredSeason(db: Database) {
+  const now = new Date()
+  return db.query.seasons.findFirst({
+    where: and(
+      eq(schema.seasons.status, 'active'),
+      lt(schema.seasons.endsAt, now),
+    ),
+  })
+}
+
 export async function rolloverSeason(db: Database) {
   return db.transaction(async (tx) => {
     const active = await tx.query.seasons.findFirst({ where: eq(schema.seasons.status, 'active') })
@@ -71,6 +85,17 @@ export async function rolloverSeason(db: Database) {
 
     return next ?? null
   })
+}
+
+/**
+ * Detect and perform season rollover if needed.
+ * Designed to be called periodically from the worker.
+ * Returns the new season if rollover occurred, null otherwise.
+ */
+export async function checkAndRolloverSeason(db: Database) {
+  const expired = await findExpiredSeason(db)
+  if (!expired) return null
+  return rolloverSeason(db)
 }
 
 export async function applyRatingDecay(db: Database, decayAfterDays: number) {

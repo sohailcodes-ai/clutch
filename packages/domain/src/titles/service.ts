@@ -286,6 +286,54 @@ export async function getCompetitiveFacts(
     with: { match: true },
   })
 
+  // Collect all match IDs for batch queries
+  const matchIds = [...new Set(participants.map((p) => p.matchId))]
+
+  // Batch fetch all submissions for these matches
+  const allSubmissions = matchIds.length > 0
+    ? await db.query.submissions.findMany({
+        where: sql`${schema.submissions.matchId} = ANY(${matchIds})`,
+      })
+    : []
+
+  // Batch fetch all test cases for these question versions
+  const questionVersionIds = [...new Set(participants.map((p) => p.match.questionVersionId))]
+  const allTestCases = questionVersionIds.length > 0
+    ? await db.query.testCases.findMany({
+        where: sql`${schema.testCases.questionVersionId} = ANY(${questionVersionIds})`,
+      })
+    : []
+
+  // Batch fetch all opponents for these matches
+  const allParticipants = matchIds.length > 0
+    ? await db.query.matchParticipants.findMany({
+        where: sql`${schema.matchParticipants.matchId} = ANY(${matchIds})`,
+      })
+    : []
+
+  // Group data in memory for O(1) lookups
+  const submissionsByMatchUser = new Map<string, typeof allSubmissions>()
+  for (const sub of allSubmissions) {
+    const key = `${sub.matchId}:${sub.userId}`
+    const existing = submissionsByMatchUser.get(key) ?? []
+    existing.push(sub)
+    submissionsByMatchUser.set(key, existing)
+  }
+
+  const testCasesByVersion = new Map<string, typeof allTestCases>()
+  for (const tc of allTestCases) {
+    const existing = testCasesByVersion.get(tc.questionVersionId) ?? []
+    existing.push(tc)
+    testCasesByVersion.set(tc.questionVersionId, existing)
+  }
+
+  const participantsByMatch = new Map<string, typeof allParticipants>()
+  for (const p of allParticipants) {
+    const existing = participantsByMatch.get(p.matchId) ?? []
+    existing.push(p)
+    participantsByMatch.set(p.matchId, existing)
+  }
+
   let wins = 0
   let losses = 0
   let draws = 0
@@ -322,10 +370,10 @@ export async function getCompetitiveFacts(
       runningStreak += 1
       bestStreak = Math.max(bestStreak, runningStreak)
 
-      const myBest = await db.query.submissions.findFirst({
-        where: and(eq(schema.submissions.matchId, m.id), eq(schema.submissions.userId, userId)),
-        orderBy: desc(schema.submissions.passedCount),
-      })
+      const mySubs = submissionsByMatchUser.get(`${m.id}:${userId}`) ?? []
+      const myBest = mySubs
+        .sort((a, b) => (b.passedCount ?? 0) - (a.passedCount ?? 0))[0]
+
       if (myBest && myBest.isFinal && myBest.status === 'accepted') {
         if (myBest.executionTimeMs !== null) {
           fastestWinMs =
@@ -335,32 +383,19 @@ export async function getCompetitiveFacts(
         }
 
         // Clean sweep: every test passed on the final submission
-        const tests = await db.query.testCases.findMany({
-          where: eq(schema.testCases.questionVersionId, m.questionVersionId),
-        })
+        const tests = testCasesByVersion.get(m.questionVersionId) ?? []
         const totalWeight = tests.reduce((sum, t) => sum + t.weight, 0)
         if (myBest.passedCount >= totalWeight) cleanSweeps += 1
 
         // Perfect execution: first submission in the match was accepted
-        const earlierSubmission = await db.query.submissions.findFirst({
-          where: and(
-            eq(schema.submissions.matchId, m.id),
-            eq(schema.submissions.userId, userId),
-            ne(schema.submissions.id, myBest.id),
-          ),
-        })
+        const earlierSubmission = mySubs.find((s) => s.id !== myBest.id)
         if (!earlierSubmission) perfectExecutions += 1
 
         // Comeback: the winner had an earlier non-accepted attempt in the
         // match before landing the accepted one.
-        const earlierFailed = await db.query.submissions.findFirst({
-          where: and(
-            eq(schema.submissions.matchId, m.id),
-            eq(schema.submissions.userId, userId),
-            ne(schema.submissions.id, myBest.id),
-            ne(schema.submissions.status, 'accepted'),
-          ),
-        })
+        const earlierFailed = mySubs.find(
+          (s) => s.id !== myBest.id && s.status !== 'accepted',
+        )
         if (earlierFailed) {
           comebackWins += 1
           currentComebackStreak += 1
@@ -370,12 +405,8 @@ export async function getCompetitiveFacts(
         }
 
         // Underdog win: opponent was rated 200+ higher
-        const opponentParticipant = await db.query.matchParticipants.findFirst({
-          where: and(
-            eq(schema.matchParticipants.matchId, m.id),
-            ne(schema.matchParticipants.userId, userId),
-          ),
-        })
+        const matchParticipants = participantsByMatch.get(m.id) ?? []
+        const opponentParticipant = matchParticipants.find((op) => op.userId !== userId)
         if (opponentParticipant && p.ratingBefore !== null) {
           const ratingDiff = p.ratingBefore - (opponentParticipant.ratingBefore ?? 0)
           if (ratingDiff <= -200) underdogWins += 1
@@ -387,21 +418,12 @@ export async function getCompetitiveFacts(
       if (m.resolveReason === 'judged') {
         // First Blood: won a judged match where the opponent never got a
         // single accepted test run.
-        const opponent = await db.query.matchParticipants.findFirst({
-          where: and(
-            eq(schema.matchParticipants.matchId, m.id),
-            ne(schema.matchParticipants.userId, userId),
-          ),
-        })
+        const matchParticipants = participantsByMatch.get(m.id) ?? []
+        const opponent = matchParticipants.find((op) => op.userId !== userId)
         let opponentScored = false
         let opponentSubmitted = false
         if (opponent) {
-          const opponentSubs = await db.query.submissions.findMany({
-            where: and(
-              eq(schema.submissions.matchId, m.id),
-              eq(schema.submissions.userId, opponent.userId),
-            ),
-          })
+          const opponentSubs = submissionsByMatchUser.get(`${m.id}:${opponent.userId}`) ?? []
           opponentSubmitted = opponentSubs.length > 0
           const best = opponentSubs.sort((a, b) => (b.passedCount ?? 0) - (a.passedCount ?? 0))[0]
           opponentScored = (best?.passedCount ?? 0) > 0
